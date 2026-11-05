@@ -35,11 +35,34 @@ const state = {
   pendingSpawn: null,      // {fromCardId, flowX, flowY} while the preview is open
   digests: new Map(),      // sessionId -> {summary, keyFindings, nextStep}
   digestBusy: new Set(),   // sessionIds currently generating
+  status: new Map(),       // sessionId -> {running, active, waiting, draft, lastSeq}
+  ghosts: new Set(),       // card ids whose session no longer exists
+  dismissed: new Set(),    // session ids the user removed from the board on purpose
+  wsColors: new Map(),     // workspaceId -> colour
+  stacked: new Map(),      // workspaceId -> true when folded into a stack cell
+  drawerWs: null,          // workspaceId whose drawer is open
 };
 
 const snap = (v) => Math.round(v / GRID) * GRID;
+const STACK_LIMIT = 8;   // cards shown before a workspace folds the rest away
+
+// Members visible on the board; the remainder collapses into one stack cell.
+function workspaceLayout(w) {
+  const memberSet = new Set(w.sessionIds);
+  const members = state.sessions.filter((s) => memberSet.has(s.sessionId));
+  const visible = members.slice(0, STACK_LIMIT);
+  const folded = members.slice(STACK_LIMIT);
+  return { members, visible, folded };
+}
 
 initFontScale();
+// Follow the OS colour scheme.
+const mq = window.matchMedia('(prefers-color-scheme: light)');
+const applyScheme = () => {
+  document.documentElement.dataset.scheme = mq.matches ? 'light' : 'dark';
+};
+applyScheme();
+mq.addEventListener('change', applyScheme);
 subscribeLocale(() => { applyStaticText(); render(); });
 subscribeFont(() => { applyStaticText(); render(); });
 
@@ -89,13 +112,13 @@ function ensureLayout() {
   for (const w of state.workspaces) for (const id of w.sessionIds) memberOf.set(id, w.workspaceId);
 
   // Members are laid out inside their own workspace block, so frames stay tight.
+  // A workspace larger than STACK_LIMIT keeps its first members and folds the rest.
   let cursorY = 48;
   for (const w of state.workspaces) {
-    const members = state.sessions.filter((s) => memberOf.get(s.sessionId) === w.workspaceId);
+    const { members, visible } = workspaceLayout(w);
     if (members.length === 0) continue;
     let i = 0;
-    let maxY = cursorY;
-    for (const s of members) {
+    for (const s of visible) {
       if (!state.positions.has(s.sessionId)) {
         const col = i % COLS, row = Math.floor(i / COLS);
         state.positions.set(s.sessionId, {
@@ -105,9 +128,8 @@ function ensureLayout() {
       }
       i++;
     }
-    const rows = Math.ceil(members.length / COLS);
-    maxY = cursorY + 26 + rows * (132 + CARD_GAP_Y) + 30;
-    cursorY = snap(maxY);
+    const rows = Math.ceil(visible.length / COLS);
+    cursorY = snap(cursorY + 26 + rows * (132 + CARD_GAP_Y) + 30);
   }
 
   // Sessions that belong to no workspace sit below, in their own grid.
@@ -149,6 +171,109 @@ function ensureFrames() {
   }
 }
 
+function renderStackCells() {
+  canvasEl.querySelectorAll('.stack-cell').forEach((el) => el.remove());
+  const c = state.camera;
+  for (const w of state.workspaces) {
+    const { folded } = workspaceLayout(w);
+    if (folded.length === 0) continue;
+    const r = state.wsRect.get(w.workspaceId);
+    if (!r) continue;
+    const el = document.createElement('div');
+    el.className = 'stack-cell';
+    el.style.left = ((r.x + r.w - 150) * c.zoom + c.x) + 'px';
+    el.style.top = ((r.y + 40) * c.zoom + c.y) + 'px';
+    el.style.transform = 'scale(' + c.zoom + ')';
+    el.style.transformOrigin = '0 0';
+    const n = document.createElement('div');
+    n.className = 'stack-count';
+    n.textContent = '共 ' + folded.length + ' 个对话';
+    const h = document.createElement('div');
+    h.className = 'stack-hint';
+    h.textContent = '点开查看';
+    el.appendChild(n);
+    el.appendChild(h);
+    el.addEventListener('click', (e) => { e.stopPropagation(); openDrawer(w.workspaceId); });
+    canvasEl.appendChild(el);
+  }
+}
+
+function openDrawer(workspaceId) {
+  state.drawerWs = workspaceId;
+  renderDrawer();
+}
+
+function closeDrawer() {
+  state.drawerWs = null;
+  const el = document.getElementById('drawer');
+  if (el) el.remove();
+}
+
+async function renderDrawer() {
+  if (!state.drawerWs) { closeDrawer(); return; }
+  const w = state.workspaces.find((x) => x.workspaceId === state.drawerWs);
+  if (!w) { closeDrawer(); return; }
+  let el = document.getElementById('drawer');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'drawer';
+
+  const head = document.createElement('div');
+  head.className = 'drawer-head';
+  const title = document.createElement('span');
+  title.className = 'drawer-title';
+  title.textContent = w.title + ' · 共 ' + w.sessionIds.length + ' 个对话';
+  head.appendChild(title);
+  const search = document.createElement('input');
+  search.className = 'drawer-search';
+  search.placeholder = '搜这个分组里的对话';
+  head.appendChild(search);
+  const close = document.createElement('button');
+  close.className = 'panel-close';
+  close.textContent = '✕';
+  close.addEventListener('click', closeDrawer);
+  head.appendChild(close);
+  el.appendChild(head);
+
+  const list = document.createElement('div');
+  list.className = 'drawer-list';
+  el.appendChild(list);
+
+  const { members, folded } = workspaceLayout(w);
+  const rows = [...folded, ...members.filter((m) => !folded.includes(m))];
+  const paint = (filter) => {
+    list.innerHTML = '';
+    const q = (filter ?? '').trim().toLowerCase();
+    const shown = rows.filter((s) => !q || s.title.toLowerCase().includes(q) || (s.lastPrompt ?? '').toLowerCase().includes(q));
+    if (shown.length === 0) {
+      const none = document.createElement('div');
+      none.className = 'drawer-empty';
+      none.textContent = '没有匹配的对话';
+      list.appendChild(none);
+      return;
+    }
+    for (const s of shown) {
+      const row = document.createElement('div');
+      row.className = 'drawer-row' + (folded.includes(s) ? ' folded' : '');
+      const rowTitle = document.createElement('span');
+      rowTitle.className = 'drawer-row-title';
+      rowTitle.textContent = s.title;
+      row.appendChild(rowTitle);
+      const meta = document.createElement('span');
+      meta.className = 'drawer-row-meta';
+      meta.textContent = relTime(s.updatedAt);
+      row.appendChild(meta);
+      row.addEventListener('click', () => { closeDrawer(); selectSession(s.sessionId); focusCard(s.sessionId); });
+      list.appendChild(row);
+    }
+  };
+  paint('');
+  search.addEventListener('input', () => paint(search.value));
+
+  document.getElementById('canvas-wrap').appendChild(el);
+  setTimeout(() => search.focus(), 40);
+}
+
 function renderFrames() {
   canvasEl.querySelectorAll('.frame').forEach((el) => el.remove());
   const c = state.camera;
@@ -162,6 +287,11 @@ function renderFrames() {
     el.style.top = (r.y * c.zoom + c.y) + 'px';
     el.style.width = (r.w * c.zoom) + 'px';
     el.style.height = (r.h * c.zoom) + 'px';
+    const colour = state.wsColors.get(w.workspaceId);
+    if (colour) {
+      el.style.borderColor = colour;
+      el.style.background = colour + '0d';
+    }
 
     const label = document.createElement('div');
     label.className = 'frame-label';
@@ -231,7 +361,17 @@ function renderEdges() {
       { x: p.x * c.zoom + c.x, y: p.y * c.zoom + c.y },
       { x: q.x * c.zoom + c.x, y: q.y * c.zoom + c.y }
     ));
-    path.setAttribute('class', 'edge' + (edge.pending ? ' pending' : '') + (edge.kind === 'full' ? ' full' : ''));
+    let cls = 'edge';
+    if (edge.pending) cls += ' pending';
+    if (edge.kind === 'full') cls += ' full';
+    else if (edge.lastPushAt !== undefined) {
+      const src = state.status.get(edge.fromCardId);
+      const stale = src && src.lastSeq !== null && src.lastSeq !== undefined
+        && src.lastSeq > (edge.pushedSeq ?? 0);
+      cls += stale ? ' behind' : ' synced';
+    }
+    if (edge.autoPush) cls += ' auto';
+    path.setAttribute('class', cls);
     path.dataset.edgeId = edge.id;
     svg.appendChild(path);
   }
@@ -249,22 +389,34 @@ function applyCamera() {
     el.style.transform = 'scale(' + c.zoom + ')';
   }
   renderFrames();
+  renderStackCells();
   renderEdges();
 }
 
 function cardBadges(s) {
   const out = [];
-  if (s.running) out.push(['running', '运行中']);
-  if (s.pendingInput > 0) out.push(['waiting', '等你回复']);
+  const st = state.status.get(s.sessionId) ?? {};
+  if (st.running || s.running) out.push(['running', '运行中']);
+  if (st.waiting) out.push(['waiting', '等你回复']);
+  if (st.draft) out.push(['draft', '待发送']);
   if (s.pinned) out.push(['pin', '置顶']);
   return out;
 }
 
 function openCardMenu(x, y, s) {
+  const dg = state.digests.get(s.sessionId);
+  const groupItems = state.workspaces.length > 1
+    ? state.workspaces.map((w) => ({
+        label: '移入「' + w.title + '」',
+        run: () => moveToWorkspace(s, w),
+      }))
+    : [];
   showMenu(x, y, [
     { label: t('menu.open'), run: () => selectSession(s.sessionId) },
     { label: s.pinned ? t('menu.unpin') : t('menu.pin'), run: () => runAction(s.pinned ? 'unpin' : 'pin', s) },
     { label: t('menu.rename'), run: () => renameCard(s) },
+    ...(dg ? [{ label: '查看摘要…', run: () => showDigestDialog(s) }] : []),
+    ...(groupItems.length ? [{ separator: true }, ...groupItems] : []),
     { separator: true },
     { label: s.running ? t('menu.stop') : t('menu.archive'), run: () => s.running ? runAction('cancel', s) : runAction('archive', s) },
     { label: t('menu.delete'), danger: true, run: () => deleteCard(s) },
@@ -330,10 +482,14 @@ let render = function () {
 
     const isPinned = s.pinned === true || state.pinnedSet.has(s.sessionId);
 
+    const isHit = state.query.trim().length >= 2
+      && (s.title.toLowerCase().includes(state.query.trim().toLowerCase())
+        || (s.lastPrompt ?? '').toLowerCase().includes(state.query.trim().toLowerCase()));
     const card = document.createElement('div');
-    card.className = 'card'
+    card.className = 'card' + (isHit ? ' hit' : '')
       + (state.selected === s.sessionId ? ' selected' : '')
-      + (state.picked.has(s.sessionId) ? ' picked' : '');
+      + (state.picked.has(s.sessionId) ? ' picked' : '')
+      + (s.ghost ? ' ghost' : '');
     card.dataset.sessionId = s.sessionId;
 
     if (state.batchMode) {
@@ -344,6 +500,7 @@ let render = function () {
     }
     const head = document.createElement('div');
     head.className = 'card-top';
+    const ghost = s.ghost === true;
     if (isPinned) {
       const pin = document.createElement('span');
       pin.className = 'card-pin';
@@ -352,8 +509,25 @@ let render = function () {
     }
     const title = document.createElement('span');
     title.className = 'card-title';
-    title.textContent = s.title;
+    title.textContent = ghost ? '会话已不存在' : s.title;
     head.appendChild(title);
+    if (ghost) {
+      const rm = document.createElement('button');
+      rm.className = 'card-remove';
+      rm.textContent = '移除卡片';
+      rm.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        state.sessions = state.sessions.filter((x) => x.sessionId !== s.sessionId);
+        state.positions.delete(s.sessionId);
+        state.ghosts.delete(s.sessionId);
+        state.dismissed.add(s.sessionId);
+        window.studio.savePosition(s.sessionId, null);
+        toast('已移除卡片');
+        render();
+      });
+      card.appendChild(rm);
+    }
     card.appendChild(head);
 
     if (s.lastPrompt) {
@@ -364,15 +538,19 @@ let render = function () {
     }
 
     const dg = state.digests.get(s.sessionId);
+    const st = state.status.get(s.sessionId) ?? {};
+    const stale = dg?.lastSeq !== undefined && st.lastSeq !== null && st.lastSeq !== undefined
+      && st.lastSeq > dg.lastSeq;
     if (dg?.summary) {
       const dgEl = document.createElement('div');
       dgEl.className = 'card-digest';
-      dgEl.textContent = dg.summary;
+      dgEl.textContent = (stale ? '⚠ ' : '') + dg.summary;
       dgEl.title = [
         dg.summary,
         ...(dg.keyFindings ?? []).map((x) => '· ' + x),
         dg.nextStep ? '下一步：' + dg.nextStep : '',
       ].filter(Boolean).join('\n');
+      if (stale) dgEl.classList.add('stale');
       card.appendChild(dgEl);
     }
 
@@ -448,6 +626,84 @@ function selectSession(sessionId) {
   openPanel(sessionId);
 }
 
+function showDigestDialog(s) {
+  const dg = state.digests.get(s.sessionId);
+  if (!dg) { toast('这个对话还没有摘要，先点 ⟳ 生成'); return; }
+  const back = document.createElement('div');
+  back.className = 'dlg-back';
+  const box = document.createElement('div');
+  box.className = 'dlg dlg-wide';
+
+  const h = document.createElement('div');
+  h.className = 'dlg-title';
+  h.textContent = '摘要 · ' + s.title;
+  box.appendChild(h);
+
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'dlg-body dlg-scroll';
+  const full = [
+    '概要：' + (dg.summary ?? ''),
+    '',
+    '关键结论：',
+    ...(dg.keyFindings ?? []).map((x) => '· ' + x),
+    '',
+    '下一步：' + (dg.nextStep || '（已完成）'),
+  ].join('\n');
+  bodyEl.textContent = full;
+  box.appendChild(bodyEl);
+
+  const foot = document.createElement('div');
+  foot.className = 'dlg-foot';
+  const copy = document.createElement('button');
+  copy.className = 'dlg-btn';
+  copy.textContent = '复制';
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(full);
+      toast('已复制');
+    } catch {
+      toast('复制失败', 'error');
+    }
+  });
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'dlg-btn dlg-primary';
+  closeBtn.textContent = '关闭';
+  const done = () => back.remove();
+  closeBtn.addEventListener('click', done);
+  back.addEventListener('mousedown', (e) => { if (e.target === back) done(); });
+  foot.appendChild(copy);
+  foot.appendChild(closeBtn);
+  box.appendChild(foot);
+  back.appendChild(box);
+  document.body.appendChild(back);
+}
+
+async function moveToWorkspace(s, w) {
+  const res = await window.studio.action('moveToWorkspace', s.sessionId, w.workspaceId);
+  if (!res?.ok) { toast('移入失败: ' + String(res?.error ?? '').slice(0, 60), 'error'); return; }
+  toast('已移入「' + w.title + '」');
+  state.wsRect.clear();
+  await reload();
+}
+
+async function createSessionAt(flowX, flowY) {
+  const res = await window.studio.spawn({ mode: 'none' });
+  if (!res?.ok) { toast('创建失败: ' + String(res?.error ?? '').slice(0, 60), 'error'); return; }
+  state.positions.set(res.sessionId, { x: snap(flowX - CARD_W / 2), y: snap(flowY - 60) });
+  window.studio.savePosition(res.sessionId, state.positions.get(res.sessionId));
+  toast('已创建新对话');
+  await reload();
+  selectSession(res.sessionId);
+}
+
+function persistDigests() {
+  window.studio.saveDigests(Object.fromEntries(state.digests));
+}
+
+function persistColors() {
+  window.studio.saveColors(Object.fromEntries(state.wsColors));
+}
+
 async function generateDigest(s) {
   if (state.digestBusy.has(s.sessionId)) return;
   state.digestBusy.add(s.sessionId);
@@ -459,7 +715,9 @@ async function generateDigest(s) {
       toast('摘要失败: ' + String(res?.error ?? '').slice(0, 70), 'error');
       return;
     }
-    state.digests.set(s.sessionId, res.value);
+    const st = state.status.get(s.sessionId) ?? {};
+    state.digests.set(s.sessionId, { ...res.value, lastSeq: st.lastSeq ?? null, generatedAt: Date.now() });
+    persistDigests();
     toast('摘要已生成（' + (res.value.model ?? '') + '）');
   } catch (err) {
     toast('摘要失败: ' + String(err.message ?? err).slice(0, 70), 'error');
@@ -478,10 +736,11 @@ async function openPanel(sessionId) {
 
   const head = document.createElement('div');
   head.className = 'panel-head';
-  const t = document.createElement('span');
-  t.className = 'panel-title';
-  t.textContent = s?.title ?? sessionId;
-  head.appendChild(t);
+  // NOTE: do not name this "t" — it would shadow the t() translation helper.
+  const titleEl = document.createElement('span');
+  titleEl.className = 'panel-title';
+  titleEl.textContent = s?.title ?? sessionId;
+  head.appendChild(titleEl);
   const close = document.createElement('button');
   close.className = 'panel-close';
   close.textContent = '✕';
@@ -591,11 +850,58 @@ function endFrameDrag() {
   applyCamera();
 }
 
+const WS_COLORS = ['#4c8dff', '#38d39f', '#e3b341', '#ff7b72', '#a371f7', '#39c5cf'];
+
 function openFrameMenu(x, y, w) {
   showMenu(x, y, [
     { label: t('menu.renameWs'), run: () => renameWorkspace(w) },
     { label: t('menu.tidyWs'), run: () => { relayoutWorkspace(w); toast('已整理'); } },
+    { label: '同步本组新会话', run: () => syncWorkspace(w) },
+    { separator: true },
+    ...WS_COLORS.map((c) => ({
+      label: '标记颜色 ' + c,
+      run: () => { state.wsColors.set(w.workspaceId, c); persistColors(); applyCamera(); },
+    })),
+    { label: '清除颜色', run: () => { state.wsColors.delete(w.workspaceId); persistColors(); applyCamera(); } },
+    { separator: true },
+    { label: '删除分组', danger: true, run: () => deleteWorkspace(w) },
   ]);
+}
+
+async function syncWorkspace(w) {
+  toast('正在同步…');
+  const before = w.sessionIds.length;
+  const wz = await window.studio.workspaces();
+  if (wz?.ok) {
+    const fresh = (wz.value.items ?? []).find((x) => x.workspaceId === w.workspaceId);
+    if (fresh) {
+      w.sessionIds = fresh.sessionIds;
+      state.wsRect.delete(w.workspaceId);
+      ensureLayout();
+      ensureFrames();
+      applyCamera();
+      const added = fresh.sessionIds.length - before;
+      toast(added > 0 ? '已同步，新增 ' + added + ' 个会话' : '已同步，没有新会话');
+      return;
+    }
+  }
+  toast('同步失败', 'error');
+}
+
+async function deleteWorkspace(w) {
+  const ok = await confirmDialog({
+    title: '删除这个分组？',
+    body: '「' + w.title + '」会被删除。其中的 ' + w.sessionIds.length + ' 个对话仍保留在 DSH 里，只是不再归入分组。',
+    okLabel: '删除分组',
+    danger: true,
+  });
+  if (!ok) return;
+  const res = await window.studio.action('deleteWorkspace', w.workspaceId);
+  if (!res?.ok) { toast('删除失败: ' + String(res?.error ?? '').slice(0, 60), 'error'); return; }
+  state.wsRect.delete(w.workspaceId);
+  state.wsColors.delete(w.workspaceId);
+  toast('已删除分组');
+  await reload();
 }
 
 function relayoutWorkspace(w) {
@@ -683,9 +989,9 @@ function removeEdge(id) {
   toast('已删除连线');
 }
 
-function addEdge(fromCardId, toCardId, kind, injectedText) {
+function addEdge(fromCardId, toCardId, kind, injectedText, extra = {}) {
   const id = 'e' + Math.random().toString(36).slice(2, 9);
-  state.edges.push({ id, fromCardId, toCardId, kind, injectedText });
+  state.edges.push({ id, fromCardId, toCardId, kind, injectedText, ...extra });
   window.studio.saveEdges(state.edges);
   renderEdges();
   return id;
@@ -839,14 +1145,66 @@ function endDrag() {
 
 // ---- board pan / zoom ------------------------------------------------------
 
-let panning = null;
+let marquee = null;
 canvasEl.addEventListener('mousedown', (e) => {
-  if (e.button !== 0 || e.target.closest('.card')) return;
+  if (e.button !== 0) return;
+  // Alt+drag empty space draws a selection rectangle for batch picking.
+  if (e.altKey && !e.target.closest('.card') && !e.target.closest('.stack-cell')) {
+    const rect = canvasEl.getBoundingClientRect();
+    marquee = { x0: e.clientX - rect.left, y0: e.clientY - rect.top, x1: e.clientX - rect.left, y1: e.clientY - rect.top };
+    state.batchMode = true;
+    document.addEventListener('mousemove', onMarquee);
+    document.addEventListener('mouseup', endMarquee, { once: true });
+    return;
+  }
+  if (e.target.closest('.card')) return;
   canvasEl.classList.add('dragging');
   panning = { ox: e.clientX, oy: e.clientY, cx: state.camera.x, cy: state.camera.y };
   document.addEventListener('mousemove', onPan);
   document.addEventListener('mouseup', endPan, { once: true });
 });
+function onMarquee(e) {
+  if (!marquee) return;
+  const rect = canvasEl.getBoundingClientRect();
+  marquee.x1 = e.clientX - rect.left;
+  marquee.y1 = e.clientY - rect.top;
+  let el = document.getElementById('marquee');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'marquee';
+    canvasEl.appendChild(el);
+  }
+  const x = Math.min(marquee.x0, marquee.x1);
+  const y = Math.min(marquee.y0, marquee.y1);
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.width = Math.abs(marquee.x1 - marquee.x0) + 'px';
+  el.style.height = Math.abs(marquee.y1 - marquee.y0) + 'px';
+}
+
+function endMarquee() {
+  if (!marquee) return;
+  const m = marquee;
+  marquee = null;
+  document.removeEventListener('mousemove', onMarquee);
+  const el = document.getElementById('marquee');
+  if (el) el.remove();
+  const x0 = Math.min(m.x0, m.x1), x1 = Math.max(m.x0, m.x1);
+  const y0 = Math.min(m.y0, m.y1), y1 = Math.max(m.y0, m.y1);
+  const c = state.camera;
+  for (const s of state.sessions) {
+    const p = state.positions.get(s.sessionId);
+    if (!p) continue;
+    const left = p.x * c.zoom + c.x;
+    const top = p.y * c.zoom + c.y;
+    const right = left + CARD_W * c.zoom;
+    const bottom = top + 132 * c.zoom;
+    const overlaps = left < x1 && right > x0 && top < y1 && bottom > y0;
+    if (overlaps) state.picked.add(s.sessionId);
+  }
+  render();
+}
+
 function onPan(e) {
   if (!panning) return;
   state.camera.x = panning.cx + (e.clientX - panning.ox);
@@ -865,7 +1223,61 @@ canvasEl.addEventListener('click', (e) => {
   const id = path.dataset.edgeId;
   if (!id || id === '__temp') return;
   e.stopPropagation();
-  removeEdge(id);
+  const edge = state.edges.find((x) => x.id === id);
+  if (!edge) return;
+  const src = state.byId.get(edge.fromCardId);
+  showMenu(e.clientX, e.clientY, [
+    { label: '推送最新摘要', run: () => pushDigest(edge) },
+    { label: edge.autoPush ? '关闭自动推送' : '开启自动推送', run: () => toggleAutoPush(edge) },
+    { separator: true },
+    { label: '删除连线', danger: true, run: () => removeEdge(id) },
+  ]);
+});
+
+// Push: append one source summary message into the target conversation.
+async function pushDigest(edge) {
+  const src = state.byId.get(edge.fromCardId);
+  const dst = state.byId.get(edge.toCardId);
+  if (!src || !dst) return;
+  let dg = state.digests.get(edge.fromCardId);
+  if (!dg?.summary) {
+    toast('来源还没有摘要，先点 ⟳ 生成');
+    return;
+  }
+  const stamp = new Date().toLocaleString('zh-CN');
+  const text = '【来自「' + src.title + '」的更新 · ' + stamp + '】\n\n' +
+    '摘要：' + dg.summary + '\n' +
+    (dg.keyFindings?.length ? '关键结论：\n' + dg.keyFindings.map((x) => '· ' + x).join('\n') + '\n' : '') +
+    (dg.nextStep ? '下一步：' + dg.nextStep : '');
+  const res = await window.studio.push({ sessionId: dst.sessionId, text });
+  if (!res?.ok) { toast('推送失败: ' + String(res?.error ?? '').slice(0, 60), 'error'); return; }
+  const st = state.status.get(edge.fromCardId) ?? {};
+  edge.lastPushAt = Date.now();
+  edge.pushedSeq = st.lastSeq ?? 0;
+  window.studio.saveEdges(state.edges);
+  toast('已推送给「' + dst.title + '」');
+  renderEdges();
+}
+
+function toggleAutoPush(edge) {
+  edge.autoPush = !edge.autoPush;
+  window.studio.saveEdges(state.edges);
+  toast(edge.autoPush ? '已开启自动推送' : '已关闭自动推送');
+  renderEdges();
+}
+
+canvasEl.addEventListener('contextmenu', (e) => {
+  if (e.target.closest('.card') || e.target.closest('.frame-label') || e.target.closest('.stack-cell')) return;
+  e.preventDefault();
+  const rect = canvasEl.getBoundingClientRect();
+  const wx = e.clientX - rect.left, wy = e.clientY - rect.top;
+  const flowX = (wx - state.camera.x) / state.camera.zoom;
+  const flowY = (wy - state.camera.y) / state.camera.zoom;
+  showMenu(e.clientX, e.clientY, [
+    { label: '新对话', run: () => createSessionAt(flowX, flowY) },
+    { separator: true },
+    { label: '整理所有分组', run: () => { state.wsRect.clear(); ensureFrames(); applyCamera(); toast('已整理'); } },
+  ]);
 });
 
 canvasEl.addEventListener('wheel', (e) => {
@@ -962,6 +1374,7 @@ function renderHits(res) {
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   closeMenu();
+  if (state.drawerWs) { closeDrawer(); return; }
   if (!panelEl.hidden) closePanel();
   else { state.selected = null; render(); }
 });
@@ -985,24 +1398,45 @@ async function reload() {
       const savedEdges = await window.studio.loadEdges();
       if (Array.isArray(savedEdges)) state.edges = savedEdges;
     } catch {}
+    try {
+      const savedDigests = await window.studio.loadDigests();
+      for (const [id, dg] of Object.entries(savedDigests ?? {})) state.digests.set(id, dg);
+    } catch {}
+    try {
+      const savedColors = await window.studio.loadColors();
+      for (const [id, c] of Object.entries(savedColors ?? {})) state.wsColors.set(id, c);
+    } catch {}
 
     const saved = await window.studio.loadLayout();
     for (const [id, pos] of Object.entries(saved || {})) {
       if (pos && typeof pos.x === 'number') state.positions.set(id, pos);
     }
+    // Cards whose session vanished from the engine become ghosts instead of disappearing.
+    const live = new Set(state.sessions.map((s) => s.sessionId));
+    for (const [id] of state.positions) {
+      if (live.has(id)) continue;
+      if (state.ghosts.has(id)) continue;
+      if (state.dismissed.has(id)) continue;
+      state.ghosts.add(id);
+      state.sessions.push({
+        sessionId: id, title: '会话已不存在', cwd: '', updatedAt: 0,
+        running: false, ghost: true,
+      });
+      state.byId.set(id, state.sessions[state.sessions.length - 1]);
+    }
+
     ensureLayout();
     ensureFrames();
     render();
     setStatus(t('status.count', { n: board.length, w: state.workspaces.length }));
 
-    // Second pass: real running flags, bounded batches, off the critical path.
-    window.studio.running(board.map((s) => s.sessionId)).then((flags) => {
+    // Second pass: real per-session status, bounded batches, off the critical path.
+    window.studio.status(board.map((s) => s.sessionId)).then((map) => {
       let changed = false;
-      for (const s of state.sessions) {
-        if (flags[s.sessionId] !== undefined && s.running !== flags[s.sessionId]) {
-          s.running = flags[s.sessionId];
-          changed = true;
-        }
+      for (const [id, st] of Object.entries(map ?? {})) {
+        state.status.set(id, st);
+        const row = state.byId.get(id);
+        if (row && row.running !== st.running) { row.running = st.running; changed = true; }
       }
       if (changed) render();
     }).catch(() => {});
@@ -1026,19 +1460,68 @@ function renderRail() {
     document.getElementById('canvas-wrap').appendChild(rail);
   }
   const rows = state.sessions.filter((s) => statusOf(s) !== null);
+  const collapsedNow = localStorage.getItem('dsh-studio.rail-collapsed') === '1';
   rail.innerHTML = '';
-  rail.hidden = rows.length === 0;
-  if (rows.length === 0) return;
+  // A collapsed rail stays visible as a strip so its toggle remains reachable.
+  rail.hidden = rows.length === 0 && !collapsedNow;
+  if (rows.length === 0 && !collapsedNow) return;
+
+  rail.classList.toggle('collapsed', collapsedNow);
 
   const head = document.createElement('div');
   head.className = 'rail-head';
-  head.textContent = t('rail.head', { n: rows.length });
+  const hText = document.createElement('span');
+  hText.textContent = collapsedNow ? '任务 ' + rows.length : t('rail.head', { n: rows.length });
+  head.appendChild(hText);
+  const toggle = document.createElement('button');
+  toggle.className = 'rail-toggle';
+  toggle.textContent = collapsedNow ? '»' : '«';
+  toggle.title = collapsedNow ? '展开状态栏' : '收起状态栏';
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    // Derive the flip from the DOM, which is the value the user is looking at.
+    const isCollapsed = rail.classList.contains('collapsed');
+    localStorage.setItem('dsh-studio.rail-collapsed', isCollapsed ? '0' : '1');
+    renderRail();
+  });
+  head.appendChild(toggle);
   rail.appendChild(head);
+
+  if (collapsedNow) return;
+  const savedOrder = JSON.parse(localStorage.getItem('dsh-studio.rail-order') || '[]');
+  const rank = new Map(savedOrder.map((id, i) => [id, i]));
+  rows.sort((a, b) => {
+    const ra = rank.has(a.sessionId) ? rank.get(a.sessionId) : Number.MAX_SAFE_INTEGER;
+    const rb = rank.has(b.sessionId) ? rank.get(b.sessionId) : Number.MAX_SAFE_INTEGER;
+    if (ra !== rb) return ra - rb;
+    return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  });
 
   for (const s of rows) {
     const st = statusOf(s);
     const row = document.createElement('div');
     row.className = 'rail-row';
+    row.draggable = true;
+    row.dataset.sessionId = s.sessionId;
+    row.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', s.sessionId);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragover', (e) => e.preventDefault());
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const from = e.dataTransfer.getData('text/plain');
+      const to = s.sessionId;
+      if (!from || from === to) return;
+      const order = [...document.querySelectorAll('.rail-row')].map((r) => r.dataset.sessionId);
+      const fi = order.indexOf(from);
+      if (fi >= 0) order.splice(fi, 1);
+      const ti = order.indexOf(to);
+      order.splice(ti < 0 ? order.length : ti, 0, from);
+      localStorage.setItem('dsh-studio.rail-order', JSON.stringify(order));
+      renderRail();
+    });
     const dot = document.createElement('span');
     dot.className = 'card-dot running';
     row.appendChild(dot);

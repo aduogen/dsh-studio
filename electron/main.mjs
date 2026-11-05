@@ -77,6 +77,17 @@ ipcMain.handle('spawn:run', async (_e, opts) => {
   }
 });
 
+ipcMain.handle('push:send', async (_e, opts) => {
+  try {
+    const { sessionId, text } = opts ?? {};
+    if (!sessionId || !text) return { ok: false, error: '缺少参数' };
+    await api.pushToSession(sessionId, text);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err.message ?? err) };
+  }
+});
+
 ipcMain.handle('digest:get', async (_e, sessionId) => {
   try { return { ok: true, value: await api.digestOf(sessionId) }; }
   catch (err) { return { ok: false, error: String(err.message ?? err) }; }
@@ -97,6 +108,12 @@ ipcMain.handle('action:run', async (_e, action, sessionId, extra) => {
       case 'archive': await api.archive(sessionId, true); return { ok: true };
       case 'cancel': await api.cancel(sessionId); return { ok: true };
       case 'delete': await api.archive(sessionId, true); await api.deleteSession(sessionId); return { ok: true };
+      case 'createWorkspace': {
+        const created = await api.createWorkspace(String(extra ?? ''));
+        return { ok: true, value: created };
+      }
+      case 'deleteWorkspace': await api.deleteWorkspace(sessionId); return { ok: true };
+      case 'moveToWorkspace': await api.moveSessionToWorkspace(sessionId, String(extra ?? '')); return { ok: true };
       case 'renameWorkspace': await engine.call('workspace/rename', { request: { workspaceId: sessionId, title: String(extra ?? '') } }, 'request'); return { ok: true };
       default: return { ok: false, error: 'unknown action ' + action };
     }
@@ -106,6 +123,7 @@ ipcMain.handle('action:run', async (_e, action, sessionId, extra) => {
 });
 
 ipcMain.handle('board:running', async (_e, ids) => await api.runningStates(ids ?? []));
+ipcMain.handle('board:status', async (_e, ids) => await api.boardStatus(ids ?? []));
 
 ipcMain.handle('engine:status', async () => {
   try {
@@ -118,6 +136,32 @@ ipcMain.handle('engine:status', async () => {
 
 // Persisted card positions live beside the app's user data.
 const layoutFile = () => path.join(app.getPath('userData'), 'canvas-layout.json');
+
+const digestsFile = () => path.join(app.getPath('userData'), 'canvas-digests.json');
+const colorsFile = () => path.join(app.getPath('userData'), 'canvas-colors.json');
+
+// Atomic write: a crash mid-write must not leave a truncated canvas file.
+function writeAtomic(file, data) {
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, data, 'utf8');
+  fs.renameSync(tmp, file);
+}
+
+ipcMain.handle('digests:load', async () => {
+  try { return JSON.parse(fs.readFileSync(digestsFile(), 'utf8')); } catch { return {}; }
+});
+
+ipcMain.handle('digests:save', async (_e, map) => {
+  try { writeAtomic(digestsFile(), JSON.stringify(map ?? {})); return true; } catch { return false; }
+});
+
+ipcMain.handle('colors:load', async () => {
+  try { return JSON.parse(fs.readFileSync(colorsFile(), 'utf8')); } catch { return {}; }
+});
+
+ipcMain.handle('colors:save', async (_e, map) => {
+  try { writeAtomic(colorsFile(), JSON.stringify(map ?? {})); return true; } catch { return false; }
+});
 
 ipcMain.handle('layout:load', async () => {
   try {

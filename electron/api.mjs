@@ -26,6 +26,34 @@ export class StudioApi {
     return this.engine.call('session/list', {}, '_request');
   }
 
+  // Status flags for the whole board, read in bounded batches so a big board
+  // stays responsive. Used by the card chips and the left rail.
+  async boardStatus(sessionIds) {
+    const out = {};
+    const BATCH = 8;
+    for (let i = 0; i < sessionIds.length; i += BATCH) {
+      const slice = sessionIds.slice(i, i + BATCH);
+      const rows = await Promise.all(slice.map(async (id) => {
+        const st = await withTimeout(this.call('session/state', { sessionId: id }), 4000, null);
+        const pj = await withTimeout(this.call('session/projections', { sessionId: id }), 4000, null);
+        if (!st && !pj) return null;
+        const v = pj?.values ?? {};
+        const inboxCount = (v.inbox?.['next-turn']?.length ?? 0) + (v.inbox?.['next-step']?.length ?? 0);
+        const questions = v.userQuestions?.active?.length ?? 0;
+        const waiting = (st?.pendingInput?.length ?? 0) > 0 || questions > 0;
+        return {
+          running: st?.running === true,
+          active: st?.active === true,
+          waiting,
+          draft: inboxCount > 0,
+          lastSeq: st?.cursor ?? null,
+        };
+      }));
+      slice.forEach((id, k) => { if (rows[k]) out[id] = rows[k]; });
+    }
+    return out;
+  }
+
   // Fast board: session/list only. Per-session state is fetched on demand.
   async fastBoard() {
     const list = await this.listSessions();
@@ -279,6 +307,26 @@ export class StudioApi {
       if (m.includes('disabled')) return { ok: false, disabled: true, items: [] };
       return { ok: false, error: m.slice(0, 120), items: [] };
     }
+  }
+
+  // --- workspace management -------------------------------------------------
+  createWorkspace(path) { return this.call('workspace/create', { path }); }
+  renameWorkspace(workspaceId, title) { return this.call('workspace/rename', { workspaceId, title }); }
+  deleteWorkspace(workspaceId) { return this.call('workspace/delete', { workspaceId }); }
+  // Sessions are moved between Workspaces by archiving the old accounting and
+  // re-inserting before the target's first member.
+  async moveSessionToWorkspace(sessionId, targetWorkspaceId, beforeSessionId) {
+    await this.call('workspace/insertSessionBefore', {
+      workspaceId: targetWorkspaceId,
+      sessionId,
+      ...beforeSessionId === undefined ? {} : { beforeSessionId },
+    });
+    return { ok: true };
+  }
+
+  // Push one context message into an existing conversation.
+  pushToSession(sessionId, text) {
+    return this.sendPrompt(sessionId, text);
   }
 
   rename(sessionId, title) { return this.call('session/rename', { sessionId, title }); }
