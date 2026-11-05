@@ -137,53 +137,40 @@ if (process.argv.includes('--dump')) {
       try {
         const info = await win.webContents.executeJavaScript(`(async () => {
           const wait = (ms) => new Promise(r => setTimeout(r, ms));
-          await wait(2800);
+          await wait(3000);
           const out = {};
-          out.status = document.getElementById('status')?.textContent;
-          out.cards = document.querySelectorAll('.card').length;
-          out.frames = document.querySelectorAll('.frame').length;
-          out.frameLabel = document.querySelector('.frame-label')?.textContent;
+          const dbg = window.__studioDebug;
+          out.hasDebug = !!dbg;
+          if (!dbg) return out;
 
-          // A. card click -> panel
-          const card = [...document.querySelectorAll('.card')].find(c => {
-            const f = document.querySelector('.frame')?.getBoundingClientRect();
-            const r = c.getBoundingClientRect();
-            return f && r.left >= f.left && r.right <= f.right;
-          });
-          card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-          await wait(4500);
-          const panel = document.getElementById('panel');
-          out.A_panelOpen = !panel.hidden;
-          out.A_turns = panel.querySelectorAll('.turn').length;
+          // 1. rail hidden with nothing running
+          const rail = document.getElementById('rail');
+          out.hiddenWhenIdle = rail.hidden;
 
-          // B. card context menu still works
-          card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 300, clientY: 300 }));
-          await wait(250);
-          out.B_menuItems = [...(document.querySelector('.ctx-menu')?.querySelectorAll('.ctx-item') ?? [])].map(e => e.textContent);
-          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-          await wait(150);
-          out.B_panelClosedByEsc = document.getElementById('panel').hidden;
-
-          // C. search still filters
-          const s = document.getElementById('search');
-          s.value = 'dsh-talk-map';
-          s.dispatchEvent(new Event('input', { bubbles: true }));
-          await wait(250);
-          out.C_filteredCards = document.querySelectorAll('.card').length;
-          s.value = '';
-          s.dispatchEvent(new Event('input', { bubbles: true }));
-          await wait(250);
-          out.C_restoredCards = document.querySelectorAll('.card').length;
-
-          // D. frame drag moves cards
-          const label = document.querySelector('.frame-label');
-          const before = document.querySelector('.card').offsetLeft;
-          const lr = label.getBoundingClientRect();
-          label.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: lr.left + 8, clientY: lr.top + 4, button: 0 }));
-          document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: lr.left + 88, clientY: lr.top + 4 }));
-          document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: lr.left + 88, clientY: lr.top + 4 }));
+          // 2. simulate 2 running sessions
+          const ids = dbg.state.sessions.slice(0, 2).map(s => s.sessionId);
+          dbg.setRunning(ids);
           await wait(300);
-          out.D_frameDragMovesCards = document.querySelector('.card').offsetLeft !== before;
+          out.railVisible = !rail.hidden;
+          out.railRows = rail.querySelectorAll('.rail-row').length;
+          out.railHead = rail.querySelector('.rail-head')?.textContent;
+          out.railTitles = [...rail.querySelectorAll('.rail-title')].map(e => e.textContent.slice(0, 20));
+
+          // 3. running cards show the lamp
+          out.cardsWithRunningLamp = document.querySelectorAll('.card-dot.running').length;
+
+          // 4. clicking a rail row focuses that card (opens the panel too)
+          const row = rail.querySelector('.rail-row');
+          row.click();
+          await wait(4500);
+          out.railClickOpensPanel = document.getElementById('panel')?.hidden === false;
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+          await wait(200);
+
+          // 5. rail disappears when nothing runs again
+          dbg.setRunning([]);
+          await wait(300);
+          out.hiddenAfterIdle = rail.hidden;
           return out;
         })()`);
         fs.writeFileSync(path.join(__dirname, '..', 'dom.json'), JSON.stringify(info, null, 2));

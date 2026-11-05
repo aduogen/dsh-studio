@@ -26,6 +26,8 @@ const state = {
   workspaces: [],          // {workspaceId, title, path, sessionIds}
   wsRect: new Map(),       // workspaceId -> {x,y,w,h}
   pinnedSet: new Set(),
+  batchMode: false,
+  picked: new Set(),
 };
 
 const snap = (v) => Math.round(v / GRID) * GRID;
@@ -223,7 +225,7 @@ async function deleteCard(s) {
   render();
 }
 
-function render() {
+let render = function () {
   canvasEl.querySelectorAll('.card').forEach((el) => el.remove());
   const q = state.query.trim().toLowerCase();
   for (const s of state.sessions) {
@@ -234,9 +236,17 @@ function render() {
     const isPinned = s.pinned === true || state.pinnedSet.has(s.sessionId);
 
     const card = document.createElement('div');
-    card.className = 'card' + (state.selected === s.sessionId ? ' selected' : '');
+    card.className = 'card'
+      + (state.selected === s.sessionId ? ' selected' : '')
+      + (state.picked.has(s.sessionId) ? ' picked' : '');
     card.dataset.sessionId = s.sessionId;
 
+    if (state.batchMode) {
+      const box = document.createElement('span');
+      box.className = 'pick-box' + (state.picked.has(s.sessionId) ? ' on' : '');
+      box.textContent = state.picked.has(s.sessionId) ? '✓' : '';
+      card.appendChild(box);
+    }
     const head = document.createElement('div');
     head.className = 'card-top';
     if (isPinned) {
@@ -278,6 +288,12 @@ function render() {
     card.addEventListener('mousedown', (e) => startDrag(e, s.sessionId));
     card.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (state.batchMode || e.ctrlKey || e.metaKey) {
+        if (state.picked.has(s.sessionId)) state.picked.delete(s.sessionId);
+        else state.picked.add(s.sessionId);
+        render();
+        return;
+      }
       selectSession(s.sessionId);
     });
     card.addEventListener('dblclick', (e) => {
@@ -295,7 +311,7 @@ function render() {
   }
   emptyEl.hidden = state.sessions.length > 0;
   applyCamera();
-}
+};
 
 function selectSession(sessionId) {
   state.selected = sessionId;
@@ -585,5 +601,142 @@ async function reload() {
     setStatus('读取失败: ' + String(err.message ?? err).slice(0, 90));
   }
 }
+
+// ---- status rail (left) ---------------------------------------------------
+
+function statusOf(s) {
+  if (s.running) return { kind: 'running', label: '运行中' };
+  return null;
+}
+
+function renderRail() {
+  let rail = document.getElementById('rail');
+  if (!rail) {
+    rail = document.createElement('div');
+    rail.id = 'rail';
+    document.getElementById('canvas-wrap').appendChild(rail);
+  }
+  const rows = state.sessions.filter((s) => statusOf(s) !== null);
+  rail.innerHTML = '';
+  rail.hidden = rows.length === 0;
+  if (rows.length === 0) return;
+
+  const head = document.createElement('div');
+  head.className = 'rail-head';
+  head.textContent = '队列中的任务 · ' + rows.length;
+  rail.appendChild(head);
+
+  for (const s of rows) {
+    const st = statusOf(s);
+    const row = document.createElement('div');
+    row.className = 'rail-row';
+    const dot = document.createElement('span');
+    dot.className = 'card-dot running';
+    row.appendChild(dot);
+    const label = document.createElement('span');
+    label.className = 'rail-title';
+    label.textContent = s.title;
+    row.appendChild(label);
+    row.addEventListener('click', () => { selectSession(s.sessionId); focusCard(s.sessionId); });
+    rail.appendChild(row);
+  }
+}
+
+function focusCard(sessionId) {
+  const p = state.positions.get(sessionId);
+  if (!p) return;
+  const wrap = document.getElementById('canvas-wrap').getBoundingClientRect();
+  state.camera.x = wrap.width / 2 - (p.x + CARD_W / 2) * state.camera.zoom;
+  state.camera.y = wrap.height / 2 - (p.y + 60) * state.camera.zoom;
+  applyCamera();
+}
+
+// ---- batch bar ------------------------------------------------------------
+
+function renderBatchBar() {
+  let bar = document.getElementById('batchbar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'batchbar';
+    document.getElementById('canvas-wrap').appendChild(bar);
+  }
+  bar.hidden = !state.batchMode;
+  if (!state.batchMode) return;
+  bar.innerHTML = '';
+  const count = document.createElement('span');
+  count.className = 'batch-count';
+  count.textContent = '已选 ' + state.picked.size + ' 个对话';
+  bar.appendChild(count);
+  const mk = (label, cls, fn, disabled) => {
+    const b = document.createElement('button');
+    b.className = 'batch-btn ' + cls;
+    b.textContent = label;
+    b.disabled = !!disabled;
+    b.addEventListener('click', fn);
+    return b;
+  };
+  bar.appendChild(mk('归档', '', () => runBatch('archive'), state.picked.size === 0));
+  bar.appendChild(mk('删除', 'danger', () => runBatch('delete'), state.picked.size === 0));
+  bar.appendChild(mk('取消', '', () => { state.batchMode = false; state.picked.clear(); render(); }));
+}
+
+async function runBatch(kind) {
+  const ids = [...state.picked];
+  if (ids.length === 0) return;
+  if (kind === 'delete') {
+    const ok = await confirmDialog({
+      title: '删除这 ' + ids.length + ' 个对话？',
+      body: '它们会被移入回收站。仍在运行的会先被停止。',
+      okLabel: '删除', danger: true,
+    });
+    if (!ok) return;
+  }
+  let done = 0, failed = 0;
+  for (const id of ids) {
+    const res = await window.studio.action(kind === 'delete' ? 'delete' : 'archive', id);
+    if (res?.ok) done++; else failed++;
+  }
+  state.sessions = state.sessions.filter((s) => !state.picked.has(s.sessionId));
+  state.picked.forEach((id) => state.positions.delete(id));
+  state.picked.clear();
+  state.batchMode = false;
+  toast((kind === 'delete' ? '已删除 ' : '已归档 ') + done + (failed ? '，失败 ' + failed : ''));
+  render();
+}
+
+// toggle batch mode from the top bar
+document.getElementById('btn-batch').addEventListener('click', () => {
+  state.batchMode = !state.batchMode;
+  state.picked.clear();
+  render();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.batchMode) {
+    state.batchMode = false;
+    state.picked.clear();
+    render();
+  }
+});
+
+// keep rail and batch bar in sync with render()
+const _render = render;
+render = function () {
+  _render();
+  renderRail();
+  renderBatchBar();
+};
+
+// Test seam: the app exposes its state so verification can exercise paths
+// that need live engine data (e.g. the status rail when nothing is running).
+window.__studioDebug = {
+  state,
+  render: () => render(),
+  setRunning(ids) {
+    const set = new Set(ids);
+    for (const s of state.sessions) s.running = set.has(s.sessionId);
+    render();
+  },
+};
 
 reload();
