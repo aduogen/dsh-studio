@@ -1,5 +1,6 @@
 // Typed access to the engine's endpoints, with the arg-field quirk handled in one place.
 import { Engine } from './engine.mjs';
+import { WebSocket } from 'ws';
 
 const withTimeout = (p, ms, fallback) =>
   Promise.race([p.catch(() => fallback), new Promise((r) => setTimeout(() => r(fallback), ms))]);
@@ -64,6 +65,43 @@ export class StudioApi {
       slice.forEach((id, k) => { if (rows[k]) out[id] = rows[k].running === true; });
     }
     return out;
+  }
+
+  // Workspace grouping arrives only over the Gateway stream carrier.
+  async workspaceBaseline(timeoutMs = 15000) {
+    const origin = new URL(this.engine.origin);
+    const ws = new WebSocket('ws://' + origin.host + '/api/remote.mux', { headers: { cookie: this.engine.cookie } });
+    try {
+      return await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('workspace stream timeout')), timeoutMs);
+        ws.on('open', () => {
+          ws.send(JSON.stringify({ type: 'open', streamId: 'ws-baseline', endpoint: 'workspace/follow', payload: { args: {} } }));
+        });
+        ws.on('message', (raw) => {
+          let frame;
+          try { frame = JSON.parse(String(raw)); } catch { return; }
+          if (frame.type !== 'item') return;
+          const v = frame.value;
+          if (v?.type === 'baseline') {
+            clearTimeout(timer);
+            const value = v.value ?? {};
+            resolve({
+              items: (value.items ?? []).map((w) => ({
+                workspaceId: w.workspaceId,
+                path: w.path,
+                title: w.title,
+                sessionIds: w.sessionIds ?? [],
+              })),
+              pinnedSessionIds: value.pinnedSessionIds ?? [],
+              archivedSessionIds: value.archivedSessionIds ?? [],
+            });
+          }
+        });
+        ws.on('error', (err) => { clearTimeout(timer); reject(new Error(String(err.message ?? err))); });
+      });
+    } finally {
+      try { ws.close(); } catch {}
+    }
   }
 
   rename(sessionId, title) { return this.call('session/rename', { sessionId, title }); }

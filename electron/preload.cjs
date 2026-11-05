@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('studio', {
   invoke: (endpoint, args) => ipcRenderer.invoke('engine:invoke', endpoint, args),
   board: () => ipcRenderer.invoke('board:get'),
   detail: (sessionId) => ipcRenderer.invoke('session:detail', sessionId),
+  workspaces: () => ipcRenderer.invoke('workspaces:get'),
   running: (ids) => ipcRenderer.invoke('board:running', ids),
   action: (name, sessionId, extra) => ipcRenderer.invoke('action:run', name, sessionId, extra),
   loadLayout: () => ipcRenderer.invoke('layout:load'),

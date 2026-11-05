@@ -23,6 +23,9 @@ const state = {
   camera: { x: 0, y: 0, zoom: 1 },
   dragging: null,
   query: '',
+  workspaces: [],          // {workspaceId, title, path, sessionIds}
+  wsRect: new Map(),       // workspaceId -> {x,y,w,h}
+  pinnedSet: new Set(),
 };
 
 const snap = (v) => Math.round(v / GRID) * GRID;
@@ -40,15 +43,101 @@ function relTime(ts) {
 }
 
 function ensureLayout() {
+  const memberOf = new Map();
+  for (const w of state.workspaces) for (const id of w.sessionIds) memberOf.set(id, w.workspaceId);
+
+  // Members are laid out inside their own workspace block, so frames stay tight.
+  let cursorY = 48;
+  for (const w of state.workspaces) {
+    const members = state.sessions.filter((s) => memberOf.get(s.sessionId) === w.workspaceId);
+    if (members.length === 0) continue;
+    let i = 0;
+    let maxY = cursorY;
+    for (const s of members) {
+      if (!state.positions.has(s.sessionId)) {
+        const col = i % COLS, row = Math.floor(i / COLS);
+        state.positions.set(s.sessionId, {
+          x: snap(80 + col * (CARD_W + CARD_GAP_X)),
+          y: snap(cursorY + 26 + row * (132 + CARD_GAP_Y)),
+        });
+      }
+      i++;
+    }
+    const rows = Math.ceil(members.length / COLS);
+    maxY = cursorY + 26 + rows * (132 + CARD_GAP_Y) + 30;
+    cursorY = snap(maxY);
+  }
+
+  // Sessions that belong to no workspace sit below, in their own grid.
+  const loose = state.sessions.filter((s) => !memberOf.has(s.sessionId));
   let i = 0;
-  for (const s of state.sessions) {
+  for (const s of loose) {
     if (state.positions.has(s.sessionId)) continue;
     const col = i % COLS, row = Math.floor(i / COLS);
     state.positions.set(s.sessionId, {
-      x: snap(60 + col * (CARD_W + CARD_GAP_X)),
-      y: snap(48 + row * (132 + CARD_GAP_Y)),
+      x: snap(80 + col * (CARD_W + CARD_GAP_X)),
+      y: snap(cursorY + 40 + row * (132 + CARD_GAP_Y)),
     });
     i++;
+  }
+}
+
+const FRAME_PAD = 26;
+const FRAME_LABEL_H = 26;
+
+function ensureFrames() {
+  for (const w of state.workspaces) {
+    if (state.wsRect.has(w.workspaceId)) continue;
+    const memberSet = new Set(w.sessionIds);
+    const members = state.sessions
+      .filter((s) => memberSet.has(s.sessionId))
+      .map((s) => state.positions.get(s.sessionId))
+      .filter(Boolean);
+    if (members.length === 0) continue;
+    const minX = Math.min(...members.map((p) => p.x));
+    const minY = Math.min(...members.map((p) => p.y));
+    const maxX = Math.max(...members.map((p) => p.x)) + CARD_W;
+    const maxY = Math.max(...members.map((p) => p.y)) + 132;
+    state.wsRect.set(w.workspaceId, {
+      x: snap(minX - FRAME_PAD),
+      y: snap(minY - FRAME_PAD - FRAME_LABEL_H),
+      w: snap(maxX - minX + FRAME_PAD * 2),
+      h: snap(maxY - minY + FRAME_PAD * 2 + FRAME_LABEL_H),
+    });
+  }
+}
+
+function renderFrames() {
+  canvasEl.querySelectorAll('.frame').forEach((el) => el.remove());
+  const c = state.camera;
+  for (const w of state.workspaces) {
+    const r = state.wsRect.get(w.workspaceId);
+    if (!r) continue;
+    const el = document.createElement('div');
+    el.className = 'frame';
+    el.dataset.workspaceId = w.workspaceId;
+    el.style.left = (r.x * c.zoom + c.x) + 'px';
+    el.style.top = (r.y * c.zoom + c.y) + 'px';
+    el.style.width = (r.w * c.zoom) + 'px';
+    el.style.height = (r.h * c.zoom) + 'px';
+
+    const label = document.createElement('div');
+    label.className = 'frame-label';
+    label.textContent = w.title + ' · ' + w.sessionIds.length;
+    label.style.fontSize = Math.max(10, 11 * c.zoom) + 'px';
+    label.title = w.path;
+    label.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      if (e.button !== 0) return;
+      startFrameDrag(e, w);
+    });
+    label.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openFrameMenu(e.clientX, e.clientY, w);
+    });
+    el.appendChild(label);
+    canvasEl.appendChild(el);
   }
 }
 
@@ -63,6 +152,7 @@ function applyCamera() {
     el.style.top = (p.y * c.zoom + c.y) + 'px';
     el.style.transform = 'scale(' + c.zoom + ')';
   }
+  renderFrames();
 }
 
 function cardBadges(s) {
@@ -141,13 +231,15 @@ function render() {
     if (!p) continue;
     if (q && !(s.title.toLowerCase().includes(q) || (s.lastPrompt || '').toLowerCase().includes(q))) continue;
 
+    const isPinned = s.pinned === true || state.pinnedSet.has(s.sessionId);
+
     const card = document.createElement('div');
     card.className = 'card' + (state.selected === s.sessionId ? ' selected' : '');
     card.dataset.sessionId = s.sessionId;
 
     const head = document.createElement('div');
     head.className = 'card-top';
-    if (s.pinned) {
+    if (isPinned) {
       const pin = document.createElement('span');
       pin.className = 'card-pin';
       pin.textContent = '📌';
@@ -286,6 +378,90 @@ function closePanel() {
 
 // ---- dragging --------------------------------------------------------------
 
+function startFrameDrag(e, w) {
+  const memberSet = new Set(w.sessionIds);
+  const members = state.sessions.filter((s) => memberSet.has(s.sessionId));
+  const starts = members
+    .map((s) => ({ id: s.sessionId, pos: state.positions.get(s.sessionId) }))
+    .filter((x) => x.pos);
+  state.dragging = {
+    frame: w.workspaceId, starts, ox: e.clientX, oy: e.clientY, z: state.camera.zoom, moved: false,
+  };
+  document.addEventListener('mousemove', onFrameDrag);
+  document.addEventListener('mouseup', endFrameDrag, { once: true });
+}
+
+function onFrameDrag(e) {
+  const d = state.dragging;
+  if (!d || !d.frame) return;
+  const dx = (e.clientX - d.ox) / d.z;
+  const dy = (e.clientY - d.oy) / d.z;
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) d.moved = true;
+  for (const x of d.starts) {
+    state.positions.set(x.id, { x: x.pos.x + dx, y: x.pos.y + dy });
+  }
+  const r = state.wsRect.get(d.frame);
+  if (r) {
+    const startRect = d.startRect ?? (d.startRect = r);
+    state.wsRect.set(d.frame, { ...startRect, x: startRect.x + dx, y: startRect.y + dy });
+  }
+  applyCamera();
+}
+
+function endFrameDrag() {
+  const d = state.dragging;
+  state.dragging = null;
+  document.removeEventListener('mousemove', onFrameDrag);
+  if (!d?.moved) return;
+  for (const x of d.starts) {
+    const p = state.positions.get(x.id);
+    if (p) {
+      const s = { x: snap(p.x), y: snap(p.y) };
+      state.positions.set(x.id, s);
+      window.studio.savePosition(x.id, s);
+    }
+  }
+  const r = state.wsRect.get(d.frame);
+  if (r) state.wsRect.set(d.frame, { x: snap(r.x), y: snap(r.y), w: r.w, h: r.h });
+  applyCamera();
+}
+
+function openFrameMenu(x, y, w) {
+  showMenu(x, y, [
+    { label: '重命名工作区…', run: () => renameWorkspace(w) },
+    { label: '整理本组卡片', run: () => { relayoutWorkspace(w); toast('已整理'); } },
+  ]);
+}
+
+function relayoutWorkspace(w) {
+  const memberSet = new Set(w.sessionIds);
+  const members = state.sessions.filter((s) => memberSet.has(s.sessionId));
+  const r = state.wsRect.get(w.workspaceId);
+  if (!r) return;
+  let i = 0;
+  for (const s of members) {
+    const col = i % COLS, row = Math.floor(i / COLS);
+    state.positions.set(s.sessionId, {
+      x: snap(r.x + FRAME_PAD + col * (CARD_W + CARD_GAP_X)),
+      y: snap(r.y + FRAME_LABEL_H + FRAME_PAD + row * (132 + CARD_GAP_Y)),
+    });
+    i++;
+  }
+  applyCamera();
+}
+
+async function renameWorkspace(w) {
+  const next = await promptDialog({ title: '重命名工作区', value: w.title, okLabel: '保存' });
+  if (next === null) return;
+  const title = next.trim();
+  if (!title || title === w.title) return;
+  const res = await window.studio.action('renameWorkspace', w.workspaceId, title);
+  if (!res?.ok) { toast('改名失败: ' + String(res?.error ?? '').slice(0, 60), 'error'); return; }
+  w.title = title;
+  toast('已重命名工作区');
+  render();
+}
+
 function startDrag(e, sessionId) {
   if (e.button !== 0) return;
   e.stopPropagation();
@@ -376,13 +552,23 @@ async function reload() {
     const board = await window.studio.board();
     state.sessions = board;
     state.byId = new Map(board.map((s) => [s.sessionId, s]));
+    // Workspaces define the grouping frames.
+    try {
+      const wz = await window.studio.workspaces();
+      if (wz?.ok) {
+        state.workspaces = wz.value.items ?? [];
+        state.pinnedSet = new Set(wz.value.pinnedSessionIds ?? []);
+      }
+    } catch {}
+
     const saved = await window.studio.loadLayout();
     for (const [id, pos] of Object.entries(saved || {})) {
       if (pos && typeof pos.x === 'number') state.positions.set(id, pos);
     }
     ensureLayout();
+    ensureFrames();
     render();
-    setStatus(board.length + ' 个会话');
+    setStatus(board.length + ' 个会话 · ' + state.workspaces.length + ' 个分组');
 
     // Second pass: real running flags, bounded batches, off the critical path.
     window.studio.running(board.map((s) => s.sessionId)).then((flags) => {

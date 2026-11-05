@@ -178,3 +178,22 @@ body {
 .dlg-primary:hover { background: #3d7de8; color: #fff; }
 .dlg-danger { background: #b62324; border-color: #b62324; color: #fff; }
 .dlg-danger:hover { background: #c9302c; color: #fff; }
+
+/* ---- workspace frames ---- */
+.frame {
+  position: absolute; z-index: 0;
+  border: 1px dashed #39424f; border-radius: 12px;
+  background: rgba(255,255,255,.012);
+  /* The body must not swallow board drags; only the label opts in. */
+  pointer-events: none;
+}
+.frame-label { pointer-events: auto; cursor: grab; }
+.frame-label:active { cursor: grabbing; }
+.frame-label {
+  position: absolute; left: 10px; top: -1px;
+  padding: 2px 8px; border-radius: 0 0 7px 7px;
+  background: #1b222c; border: 1px solid #39424f; border-top: none;
+  color: var(--fg-dim); white-space: nowrap; max-width: 80%;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.card { z-index: 1; }

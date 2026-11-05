@@ -48,6 +48,11 @@ ipcMain.handle('engine:invoke', async (_event, endpoint, args) => {
 });
 
 ipcMain.handle('board:get', async () => await api.fastBoard());
+ipcMain.handle('workspaces:get', async () => {
+  try { return { ok: true, value: await api.workspaceBaseline() }; }
+  catch (err) { return { ok: false, error: String(err.message ?? err) }; }
+});
+
 ipcMain.handle('session:detail', async (_e, sessionId) => await api.sessionDetail(sessionId));
 ipcMain.handle('action:run', async (_e, action, sessionId, extra) => {
   try {
@@ -58,6 +63,7 @@ ipcMain.handle('action:run', async (_e, action, sessionId, extra) => {
       case 'archive': await api.archive(sessionId, true); return { ok: true };
       case 'cancel': await api.cancel(sessionId); return { ok: true };
       case 'delete': await api.archive(sessionId, true); await api.deleteSession(sessionId); return { ok: true };
+      case 'renameWorkspace': await engine.call('workspace/rename', { request: { workspaceId: sessionId, title: String(extra ?? '') } }, 'request'); return { ok: true };
       default: return { ok: false, error: 'unknown action ' + action };
     }
   } catch (err) {
@@ -131,27 +137,53 @@ if (process.argv.includes('--dump')) {
       try {
         const info = await win.webContents.executeJavaScript(`(async () => {
           const wait = (ms) => new Promise(r => setTimeout(r, ms));
+          await wait(2800);
           const out = {};
+          out.status = document.getElementById('status')?.textContent;
           out.cards = document.querySelectorAll('.card').length;
-          // panel still works
-          const card = document.querySelector('.card');
+          out.frames = document.querySelectorAll('.frame').length;
+          out.frameLabel = document.querySelector('.frame-label')?.textContent;
+
+          // A. card click -> panel
+          const card = [...document.querySelectorAll('.card')].find(c => {
+            const f = document.querySelector('.frame')?.getBoundingClientRect();
+            const r = c.getBoundingClientRect();
+            return f && r.left >= f.left && r.right <= f.right;
+          });
           card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
           await wait(4500);
           const panel = document.getElementById('panel');
-          out.panelOpen = panel ? !panel.hidden : null;
-          out.panelTurns = panel?.querySelectorAll('.turn').length ?? 0;
-          // menu still works, over the panel
-          card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 260, clientY: 260 }));
+          out.A_panelOpen = !panel.hidden;
+          out.A_turns = panel.querySelectorAll('.turn').length;
+
+          // B. card context menu still works
+          card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 300, clientY: 300 }));
           await wait(250);
-          const menu = document.querySelector('.ctx-menu');
-          out.menuOpen = !!menu;
-          out.menuItems = menu ? [...menu.querySelectorAll('.ctx-item')].map(e => e.textContent) : [];
-          // toast renders
-          const ev = new KeyboardEvent('keydown', { key: 'Escape' });
-          document.dispatchEvent(ev);
+          out.B_menuItems = [...(document.querySelector('.ctx-menu')?.querySelectorAll('.ctx-item') ?? [])].map(e => e.textContent);
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
           await wait(150);
-          out.menuClosedByEsc = !document.querySelector('.ctx-menu');
-          out.panelClosedByEsc = document.getElementById('panel')?.hidden ?? null;
+          out.B_panelClosedByEsc = document.getElementById('panel').hidden;
+
+          // C. search still filters
+          const s = document.getElementById('search');
+          s.value = 'dsh-talk-map';
+          s.dispatchEvent(new Event('input', { bubbles: true }));
+          await wait(250);
+          out.C_filteredCards = document.querySelectorAll('.card').length;
+          s.value = '';
+          s.dispatchEvent(new Event('input', { bubbles: true }));
+          await wait(250);
+          out.C_restoredCards = document.querySelectorAll('.card').length;
+
+          // D. frame drag moves cards
+          const label = document.querySelector('.frame-label');
+          const before = document.querySelector('.card').offsetLeft;
+          const lr = label.getBoundingClientRect();
+          label.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: lr.left + 8, clientY: lr.top + 4, button: 0 }));
+          document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: lr.left + 88, clientY: lr.top + 4 }));
+          document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: lr.left + 88, clientY: lr.top + 4 }));
+          await wait(300);
+          out.D_frameDragMovesCards = document.querySelector('.card').offsetLeft !== before;
           return out;
         })()`);
         fs.writeFileSync(path.join(__dirname, '..', 'dom.json'), JSON.stringify(info, null, 2));
