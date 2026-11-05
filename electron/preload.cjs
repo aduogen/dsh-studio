@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('studio', {
   genDigest: (sessionId, title) => ipcRenderer.invoke('digest:generate', sessionId, title),
   digest: (sessionId) => ipcRenderer.invoke('digest:get', sessionId),
   push: (opts) => ipcRenderer.invoke('push:send', opts),
+  chatSend: (opts) => ipcRenderer.invoke('chat:send', opts),
   loadDigests: () => ipcRenderer.invoke('digests:load'),
   saveDigests: (m) => ipcRenderer.invoke('digests:save', m),
   loadColors: () => ipcRenderer.invoke('colors:load'),

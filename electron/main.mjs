@@ -77,6 +77,16 @@ ipcMain.handle('spawn:run', async (_e, opts) => {
   }
 });
 
+ipcMain.handle('chat:send', async (_e, opts) => {
+  try {
+    const { sessionId, text } = opts ?? {};
+    if (!sessionId || !String(text ?? '').trim()) return { ok: false, error: '消息为空' };
+    return await api.chatSend(sessionId, String(text));
+  } catch (err) {
+    return { ok: false, error: String(err.message ?? err) };
+  }
+});
+
 ipcMain.handle('push:send', async (_e, opts) => {
   try {
     const { sessionId, text } = opts ?? {};

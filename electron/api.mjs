@@ -325,6 +325,64 @@ export class StudioApi {
   }
 
   // Push one context message into an existing conversation.
+  // Send a user message into an existing conversation, then wait for its turn to
+  // finish. The session may be cold, so a model is bound first when needed.
+  async chatSend(sessionId, text) {
+    const before = await this.call('session/state', { sessionId }).catch(() => null);
+    const baseSeq = before?.cursor ?? 0;
+
+    // A cold session with no model cannot answer; bind the remembered one.
+    const pj = await this.call('session/projections', { sessionId }).catch(() => null);
+    if (!pj?.values?.modelSelection?.lastUsed) {
+      const combo = ModelPicker.current() ?? StudioApi.MODELS[0];
+      await this.call('session/selectModel', { sessionId, provider: combo.provider, model: combo.model })
+        .catch(() => {});
+    }
+
+    await this.sendPrompt(sessionId, text);
+
+    // Wait for the turn to close, then read the assistant text from the event log.
+    const deadline = Date.now() + 180000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 1200));
+      const page = await this.call('session/page', {
+        address: { kind: 'session', sessionId }, limit: 400,
+      }).catch(() => null);
+      const recs = (page?.records ?? []).map((r) => r.event ?? r).filter((e) => (e.seq ?? 0) > baseSeq);
+      const end = recs.find((x) => x.type === 'turn/end');
+      if (!end) continue;
+
+      const reason = end.data?.reason;
+      if (reason?.kind === 'error') {
+        return { ok: false, error: String(reason.error?.message ?? reason.kind).slice(0, 200) };
+      }
+      // Collect every assistant text block of this turn. Streaming writes several
+      // fragments, and the newest one carries the final answer, so join them in order.
+      const asst = recs.filter((x) => x.type === 'assistant/message' && (x.seq ?? 0) <= end.seq);
+      let reply = '';
+      for (const a of asst) {
+        const blocks = a?.data?.message?.content ?? [];
+        const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('');
+        if (text) reply = text;
+      }
+      if (reply.trim() === '') {
+        // The turn closed before its message was readable: read once more.
+        await new Promise((r) => setTimeout(r, 900));
+        const again = await this.call('session/page', {
+          address: { kind: 'session', sessionId }, limit: 400,
+        }).catch(() => null);
+        const recs2 = (again?.records ?? []).map((r) => r.event ?? r).filter((e) => (e.seq ?? 0) <= end.seq);
+        for (const a of recs2.filter((x) => x.type === 'assistant/message')) {
+          const blocks = a?.data?.message?.content ?? [];
+          const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('');
+          if (text) reply = text;
+        }
+      }
+      return { ok: true, reply, seq: end.seq };
+    }
+    return { ok: false, error: '等待回复超时' };
+  }
+
   pushToSession(sessionId, text) {
     return this.sendPrompt(sessionId, text);
   }

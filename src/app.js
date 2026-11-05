@@ -171,31 +171,11 @@ function ensureFrames() {
   }
 }
 
+// The fold indicator lives in the frame's own label row, not as a floating block
+// on the board: it must never cover cards or eat pan drags.
 function renderStackCells() {
   canvasEl.querySelectorAll('.stack-cell').forEach((el) => el.remove());
-  const c = state.camera;
-  for (const w of state.workspaces) {
-    const { folded } = workspaceLayout(w);
-    if (folded.length === 0) continue;
-    const r = state.wsRect.get(w.workspaceId);
-    if (!r) continue;
-    const el = document.createElement('div');
-    el.className = 'stack-cell';
-    el.style.left = ((r.x + r.w - 150) * c.zoom + c.x) + 'px';
-    el.style.top = ((r.y + 40) * c.zoom + c.y) + 'px';
-    el.style.transform = 'scale(' + c.zoom + ')';
-    el.style.transformOrigin = '0 0';
-    const n = document.createElement('div');
-    n.className = 'stack-count';
-    n.textContent = '共 ' + folded.length + ' 个对话';
-    const h = document.createElement('div');
-    h.className = 'stack-hint';
-    h.textContent = '点开查看';
-    el.appendChild(n);
-    el.appendChild(h);
-    el.addEventListener('click', (e) => { e.stopPropagation(); openDrawer(w.workspaceId); });
-    canvasEl.appendChild(el);
-  }
+  // (the stacked counts are drawn by renderFrames inside each label)
 }
 
 function openDrawer(workspaceId) {
@@ -295,9 +275,26 @@ function renderFrames() {
 
     const label = document.createElement('div');
     label.className = 'frame-label';
-    label.textContent = w.title + ' · ' + w.sessionIds.length;
     label.style.fontSize = Math.max(10, 11 * c.zoom) + 'px';
     label.title = w.path;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = w.title + ' · ' + w.sessionIds.length;
+    label.appendChild(nameSpan);
+
+    const { folded } = workspaceLayout(w);
+    if (folded.length > 0) {
+      const foldBtn = document.createElement('button');
+      foldBtn.className = 'frame-fold';
+      foldBtn.textContent = '折叠 ' + folded.length + ' 个 ▸';
+      foldBtn.title = '打开抽屉查看被折叠的对话';
+      foldBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+      foldBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openDrawer(w.workspaceId);
+      });
+      label.appendChild(foldBtn);
+    }
     label.addEventListener('mousedown', (e) => {
       e.stopPropagation();
       if (e.button !== 0) return;
@@ -456,6 +453,7 @@ async function renameCard(s) {
 }
 
 async function deleteCard(s) {
+  // A card can be removed from the board without touching the conversation.
   const ok = await confirmDialog({
     title: '删除这个会话？',
     body: '「' + s.title + '」会被移入回收站。仍在运行的会话会先被停止。',
@@ -464,12 +462,12 @@ async function deleteCard(s) {
   });
   if (!ok) return;
   const res = await window.studio.action('delete', s.sessionId);
-  if (!res?.ok) { toast(friendlyError(res?.error), 'error'); return; }
-  state.sessions = state.sessions.filter((x) => x.sessionId !== s.sessionId);
-  state.positions.delete(s.sessionId);
-  if (state.panelSession === s.sessionId) closePanel();
+  if (!res?.ok) {
+    toast(friendlyError(res?.error), 'error');
+    return;
+  }
+  removeCardLocal(s.sessionId);
   toast('已删除');
-  render();
 }
 
 let render = function () {
@@ -518,13 +516,8 @@ let render = function () {
       rm.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        state.sessions = state.sessions.filter((x) => x.sessionId !== s.sessionId);
-        state.positions.delete(s.sessionId);
-        state.ghosts.delete(s.sessionId);
-        state.dismissed.add(s.sessionId);
-        window.studio.savePosition(s.sessionId, null);
+        removeCardLocal(s.sessionId);
         toast('已移除卡片');
-        render();
       });
       card.appendChild(rm);
     }
@@ -696,6 +689,22 @@ async function createSessionAt(flowX, flowY) {
   selectSession(res.sessionId);
 }
 
+// Drop a card from the board for good: session list, layout, pending edges.
+function removeCardLocal(sessionId) {
+  state.dismissed.add(sessionId);
+  state.sessions = state.sessions.filter((x) => x.sessionId !== sessionId);
+  state.byId.delete(sessionId);
+  state.positions.delete(sessionId);
+  state.ghosts.delete(sessionId);
+  state.status.delete(sessionId);
+  state.edges = state.edges.filter((e) => e.fromCardId !== sessionId && e.toCardId !== sessionId);
+  window.studio.savePosition(sessionId, null);
+  window.studio.saveEdges(state.edges);
+  if (state.panelSession === sessionId) closePanel();
+  render();
+  renderEdges();
+}
+
 function persistDigests() {
   window.studio.saveDigests(Object.fromEntries(state.digests));
 }
@@ -762,6 +771,78 @@ async function openPanel(sessionId) {
   loading.className = 'panel-meta';
   loading.textContent = t('panel.loading');
   body.appendChild(loading);
+
+  // Composer: the panel is a real conversation, not a read-only preview.
+  const composer = document.createElement('div');
+  composer.className = 'panel-composer';
+  const input = document.createElement('textarea');
+  input.className = 'panel-input';
+  input.rows = 1;
+  input.placeholder = '发消息…（Enter 发送，Shift+Enter 换行）';
+  const send = document.createElement('button');
+  send.className = 'panel-send';
+  send.textContent = '发送';
+  composer.appendChild(input);
+  composer.appendChild(send);
+  panelEl.appendChild(composer);
+
+  const grow = () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(120, input.scrollHeight) + 'px';
+  };
+  input.addEventListener('input', grow);
+
+  const doSend = async () => {
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    grow();
+    send.disabled = true;
+    send.textContent = '…';
+
+    const mine = document.createElement('div');
+    mine.className = 'turn mine';
+    const mq = document.createElement('div');
+    mq.className = 'turn-q';
+    mq.textContent = text;
+    mine.appendChild(mq);
+    body.appendChild(mine);
+    body.scrollTop = body.scrollHeight;
+
+    const thinking = document.createElement('div');
+    thinking.className = 'panel-meta thinking';
+    thinking.textContent = '正在回复…';
+    body.appendChild(thinking);
+    body.scrollTop = body.scrollHeight;
+
+    const res = await window.studio.chatSend({ sessionId, text });
+    thinking.remove();
+    send.disabled = false;
+    send.textContent = '发送';
+
+    if (!res?.ok) {
+      const err = document.createElement('div');
+      err.className = 'panel-meta err';
+      err.textContent = '回复失败：' + String(res?.error ?? '').slice(0, 120);
+      body.appendChild(err);
+      return;
+    }
+    if (res.reply) {
+      const bot = document.createElement('div');
+      bot.className = 'turn bot';
+      const a1 = document.createElement('div');
+      a1.className = 'turn-a';
+      a1.textContent = res.reply;
+      bot.appendChild(a1);
+      body.appendChild(bot);
+    }
+    body.scrollTop = body.scrollHeight;
+  };
+
+  send.addEventListener('click', doSend);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+  });
 
   try {
     const detail = await window.studio.detail(sessionId);
@@ -866,6 +947,31 @@ function openFrameMenu(x, y, w) {
     { separator: true },
     { label: '删除分组', danger: true, run: () => deleteWorkspace(w) },
   ]);
+}
+
+// A workspace is a real directory in DSH, so creating one asks for a path.
+async function createWorkspaceFlow() {
+  const path = await promptDialog({
+    title: '新建分组（填写已存在的文件夹路径）',
+    value: 'E:/工具/DeepSeek默认工作区',
+    okLabel: '创建',
+  });
+  if (path === null) return;
+  const trimmed = path.trim();
+  if (!trimmed) return;
+  const res = await window.studio.action('createWorkspace', undefined, trimmed);
+  if (!res?.ok) {
+    const msg = String(res?.error ?? '');
+    if (msg.includes('invalid-path') || msg.includes('ENOENT')) {
+      toast('这个文件夹不存在，请填一个已存在的目录', 'error');
+    } else {
+      toast('创建失败: ' + msg.slice(0, 70), 'error');
+    }
+    return;
+  }
+  toast('分组已创建');
+  state.wsRect.clear();
+  await reload();
 }
 
 async function syncWorkspace(w) {
@@ -1095,10 +1201,12 @@ async function openSpawnPreview() {
       y: snap(pending.flowY - 66),
     });
     window.studio.savePosition(newId, state.positions.get(newId));
+    // Keep the line the user drew: bind it to the new card instead of dropping it.
+    const edgeKind = mode === 'full' ? 'full' : (mode === 'digest' ? 'digest' : 'none');
+    addEdge(pending.fromCardId, newId, edgeKind, mode === 'full' ? undefined : textarea.value);
     closeSpawn();
     toast('已创建新对话');
-    await applyStaticText();
-reload();
+    await reload();
     selectSession(newId);
   });
 
@@ -1146,6 +1254,7 @@ function endDrag() {
 // ---- board pan / zoom ------------------------------------------------------
 
 let marquee = null;
+let panning = null;
 canvasEl.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
   // Alt+drag empty space draws a selection rectangle for batch picking.
@@ -1275,6 +1384,7 @@ canvasEl.addEventListener('contextmenu', (e) => {
   const flowY = (wy - state.camera.y) / state.camera.zoom;
   showMenu(e.clientX, e.clientY, [
     { label: '新对话', run: () => createSessionAt(flowX, flowY) },
+    { label: '新建分组…', run: () => createWorkspaceFlow() },
     { separator: true },
     { label: '整理所有分组', run: () => { state.wsRect.clear(); ensureFrames(); applyCamera(); toast('已整理'); } },
   ]);
@@ -1383,8 +1493,8 @@ async function reload() {
   setStatus(t('status.loading'));
   try {
     const board = await window.studio.board();
-    state.sessions = board;
-    state.byId = new Map(board.map((s) => [s.sessionId, s]));
+    state.sessions = board.filter((r) => !state.dismissed.has(r.sessionId));
+    state.byId = new Map(state.sessions.map((s) => [s.sessionId, s]));
     // Workspaces define the grouping frames.
     try {
       const wz = await window.studio.workspaces();
@@ -1634,6 +1744,8 @@ render = function () {
 window.__studioDebug = {
   state,
   render: () => render(),
+  reload: () => reload(),
+  removeCard: (sessionId) => removeCardLocal(sessionId),
   setRunning(ids) {
     const set = new Set(ids);
     for (const s of state.sessions) s.running = set.has(s.sessionId);
