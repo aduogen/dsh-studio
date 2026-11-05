@@ -1,0 +1,80 @@
+:root {
+  --bg: #0e1116;
+  --bg-elev: #161b22;
+  --line: #262d38;
+  --fg: #e6edf3;
+  --fg-dim: #8b98a9;
+  --accent: #4c8dff;
+  --card: #1a212b;
+  --card-hover: #212a36;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  user-select: none;
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+#topbar {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  height: 44px; padding: 0 14px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+}
+#topbar button { -webkit-app-region: no-drag; }
+#brand { font-weight: 600; letter-spacing: .3px; }
+#status { color: var(--fg-dim); font-size: 12px; }
+#spacer { flex: 1; }
+#topbar button {
+  height: 26px; padding: 0 12px; border-radius: 7px; cursor: pointer;
+  background: transparent; color: var(--fg-dim);
+  border: 1px solid var(--line); font: inherit;
+}
+#topbar button:hover { background: var(--card-hover); color: var(--fg); }
+
+#canvas-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+#canvas {
+  position: absolute; inset: 0;
+  cursor: grab;
+  background-image: radial-gradient(circle, #2b3442 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+#canvas.dragging { cursor: grabbing; }
+#empty {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  color: var(--fg-dim);
+}
+
+.card {
+  position: absolute;
+  width: 236px;
+  padding: 10px 12px 9px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 10px rgba(0,0,0,.35);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, box-shadow .12s;
+  will-change: transform, left, top;
+}
+.card:hover { background: var(--card-hover); border-color: #35405280; }
+.card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 4px 18px rgba(76,141,255,.28); }
+.card-title {
+  font-weight: 600; font-size: 12.5px; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; word-break: break-word;
+}
+.card-meta {
+  margin-top: 7px; display: flex; align-items: center; gap: 6px;
+  color: var(--fg-dim); font-size: 11px;
+}
+.card-dot { width: 6px; height: 6px; border-radius: 50%; background: #3d4757; flex: none; }
+.card-dot.running { background: #38d39f; box-shadow: 0 0 6px #38d39f; }
+.card-cwd {
+  margin-top: 5px; color: #6b7787; font-size: 10.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;
+}

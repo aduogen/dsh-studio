@@ -1,0 +1,17 @@
+{
+  "name": "dsh-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Canvas-first desktop studio over the DeepSeek Harness engine",
+  "type": "module",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "dev": "node electron/dev.mjs",
+    "start": "electron .",
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "electron": "44.5.1"
+  },
+  "dependencies": {}
+}

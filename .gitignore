@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+boot.log
+dom.json
+shot.png
+.DS_Store

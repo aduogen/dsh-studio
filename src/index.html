@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>DSH Studio</title>
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <span id="brand">DSH Studio</span>
+      <span id="status">正在启动内核…</span>
+      <span id="spacer"></span>
+      <button id="btn-fit" title="适应窗口">适应</button>
+      <button id="btn-reload" title="重新载入会话">刷新</button>
+    </header>
+    <main id="canvas-wrap">
+      <div id="canvas"></div>
+      <div id="empty" hidden>还没有会话</div>
+    </main>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
