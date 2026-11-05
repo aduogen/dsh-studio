@@ -48,6 +48,8 @@ ipcMain.handle('engine:invoke', async (_event, endpoint, args) => {
 });
 
 ipcMain.handle('board:get', async () => await api.fastBoard());
+ipcMain.handle('search:run', async (_e, query) => await api.search(String(query ?? '')));
+
 ipcMain.handle('spawn:run', async (_e, opts) => {
   try {
     const { fromSessionId, mode, text, x, y } = opts ?? {};
@@ -177,39 +179,35 @@ if (process.argv.includes('--dump')) {
       try {
         const info = await win.webContents.executeJavaScript(`(async () => {
           const wait = (ms) => new Promise(r => setTimeout(r, ms));
-          await wait(3200);
+          await wait(3500);
           const out = {};
-          out.status = document.getElementById('status')?.textContent;
-          out.cards = document.querySelectorAll('.card').length;
-          out.frames = document.querySelectorAll('.frame').length;
+          out.total = document.querySelectorAll('.card').length;
+          const firstTitle = document.querySelector('.card-title')?.textContent ?? '';
+          out.firstTitle = firstTitle.slice(0, 20);
 
-          // F1 menu
-          const card = document.querySelector('.card');
-          card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 300, clientY: 300 }));
-          await wait(250);
-          out.menuItems = [...(document.querySelector('.ctx-menu')?.querySelectorAll('.ctx-item') ?? [])].map(e => e.textContent).length;
-          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-          await wait(150);
+          // filter by a real title substring
+          const needle = firstTitle.slice(2, 8);
+          out.needle = needle;
+          const s = document.getElementById('search');
+          s.value = needle;
+          s.dispatchEvent(new Event('input', { bubbles: true }));
+          await wait(300);
+          out.filtered = document.querySelectorAll('.card').length;
 
-          // F2 frames + drag
-          const label = document.querySelector('.frame-label');
-          out.frameDraggable = getComputedStyle(label).pointerEvents === 'auto';
+          // restore
+          s.value = '';
+          s.dispatchEvent(new Event('input', { bubbles: true }));
+          await wait(300);
+          out.restored = document.querySelectorAll('.card').length;
 
-          // F3 rail
-          const dbg = window.__studioDebug;
-          dbg.setRunning(dbg.state.sessions.slice(0,1).map(s => s.sessionId));
-          await wait(250);
-          out.railRows = document.querySelectorAll('.rail-row').length;
-          dbg.setRunning([]);
-
-          // F4 edges
-          out.gripCount = document.querySelectorAll('.card-grip').length;
-
-          // F5 panel
-          card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-          await wait(4500);
-          out.panelTurns = document.getElementById('panel')?.querySelectorAll('.turn').length ?? 0;
-          out.panelOpen = document.getElementById('panel')?.hidden === false;
+          // search a term that should hit content but not titles
+          s.value = 'Kimi';
+          s.dispatchEvent(new Event('input', { bubbles: true }));
+          await wait(9000);
+          out.contentHits = document.querySelectorAll('.hit-row').length;
+          out.contentHead = document.querySelector('.hits-head')?.textContent;
+          s.value = '';
+          s.dispatchEvent(new Event('input', { bubbles: true }));
           return out;
         })()`);
         fs.writeFileSync(path.join(__dirname, '..', 'dom.json'), JSON.stringify(info, null, 2));

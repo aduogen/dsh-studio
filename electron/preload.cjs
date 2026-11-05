@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('studio', {
   detail: (sessionId) => ipcRenderer.invoke('session:detail', sessionId),
   workspaces: () => ipcRenderer.invoke('workspaces:get'),
   spawn: (opts) => ipcRenderer.invoke('spawn:run', opts),
+  search: (q) => ipcRenderer.invoke('search:run', q),
   digest: (sessionId) => ipcRenderer.invoke('digest:get', sessionId),
   loadEdges: () => ipcRenderer.invoke('edges:load'),
   saveEdges: (edges) => ipcRenderer.invoke('edges:save', edges),

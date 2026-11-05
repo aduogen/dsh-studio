@@ -807,7 +807,75 @@ document.getElementById('btn-fit').addEventListener('click', () => {
 document.getElementById('btn-reload').addEventListener('click', () => reload());
 
 const searchEl = document.getElementById('search');
-searchEl.addEventListener('input', () => { state.query = searchEl.value; render(); });
+let searchTimer = null;
+searchEl.addEventListener('input', () => {
+  state.query = searchEl.value;
+  render();                             // instant title filter
+  clearTimeout(searchTimer);
+  if (state.query.trim().length < 2) { renderHits({ items: [] }); return; }
+  searchTimer = setTimeout(() => runContentSearch(state.query.trim()), 420);
+});
+searchEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { clearTimeout(searchTimer); runContentSearch(searchEl.value.trim()); }
+});
+
+async function runContentSearch(q) {
+  if (!q) return;
+  renderHits({ loading: true });
+  const res = await window.studio.search(q);
+  renderHits(res);
+}
+
+function renderHits(res) {
+  let box = document.getElementById('hits');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'hits';
+    document.getElementById('canvas-wrap').appendChild(box);
+  }
+  box.innerHTML = '';
+  const q = state.query.trim();
+  if (!q || q.length < 2) { box.hidden = true; return; }
+  box.hidden = false;
+
+  const head = document.createElement('div');
+  head.className = 'hits-head';
+  head.textContent = res.loading ? '全文搜索中…' : '全部对话里的命中 · ' + (res.items?.length ?? 0) + ' 条';
+  box.appendChild(head);
+
+  if (res.disabled) {
+    const n = document.createElement('div');
+    n.className = 'hits-note';
+    n.textContent = '全文索引未启用（本机索引关闭）—— 上方卡片过滤仍可用。';
+    box.appendChild(n);
+    return;
+  }
+  if (res.error) {
+    const n = document.createElement('div');
+    n.className = 'hits-note';
+    n.textContent = '搜索失败：' + res.error;
+    box.appendChild(n);
+    return;
+  }
+  for (const hit of (res.items ?? []).slice(0, 20)) {
+    const row = document.createElement('div');
+    row.className = 'hit-row';
+    const s = state.byId.get(hit.sessionId);
+    const title = document.createElement('div');
+    title.className = 'hit-title';
+    title.textContent = s?.title ?? hit.sessionId.slice(0, 8);
+    const snip = document.createElement('div');
+    snip.className = 'hit-snip';
+    snip.textContent = hit.snippet ?? '';
+    row.appendChild(title);
+    row.appendChild(snip);
+    row.addEventListener('click', () => {
+      if (s) selectSession(hit.sessionId);
+      focusCard(hit.sessionId);
+    });
+    box.appendChild(row);
+  }
+}
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;

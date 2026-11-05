@@ -135,6 +135,17 @@ export class StudioApi {
     };
   }
 
+  async search(query) {
+    try {
+      const res = await this.call('session/search', { query });
+      return { ok: true, items: res?.items ?? [] };
+    } catch (err) {
+      const m = String(err.message ?? err);
+      if (m.includes('disabled')) return { ok: false, disabled: true, items: [] };
+      return { ok: false, error: m.slice(0, 120), items: [] };
+    }
+  }
+
   rename(sessionId, title) { return this.call('session/rename', { sessionId, title }); }
   cancel(sessionId) { return this.call('session/cancel', { sessionId }); }
   archive(sessionId, stopActivity = false) { return this.call('workspace/archiveSession', { sessionId, stopActivity }); }

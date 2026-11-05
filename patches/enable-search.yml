@@ -1,0 +1,7 @@
+# Enables ranked full-text session search for DSH Studio.
+# The web bundle defaults this row to openAt: never, so content search is off
+# until a later layer moves it to first-search (deferred until the first query).
+- id: session-query-sqlite
+  config:
+    path: ':memory:'
+    openAt: first-search

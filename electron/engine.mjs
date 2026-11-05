@@ -6,6 +6,8 @@ import path from 'node:path';
 
 const DSH_EXE = 'E:\\工具\\DeepSeek harness\\DeepSeek Harness.exe';
 const DSH_CLI = 'E:\\工具\\DeepSeek harness\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\cli.js';
+// Overlay that turns on ranked full-text session search (the web bundle leaves it off).
+const SEARCH_PATCH = new URL('../patches/enable-search.yml', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 
 const URL_RE = /http:\/\/[^\s]+\?token=[A-Za-z0-9_-]+/;
 
@@ -37,7 +39,10 @@ export class Engine {
   async #doStart() {
     if (this.child) this.stop();
 
-    const child = spawn(DSH_EXE, ['--expose-internals', DSH_CLI, '--profile', 'web', '--no-open', '--port', '0'], {
+    const args = ['--expose-internals', DSH_CLI];
+    if (fs.existsSync(SEARCH_PATCH)) args.push('--patch', SEARCH_PATCH);
+    args.push('--profile', 'web', '--no-open', '--port', '0');
+    const child = spawn(DSH_EXE, args, {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
       windowsHide: true,
     });
