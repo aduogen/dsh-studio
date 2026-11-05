@@ -40,7 +40,7 @@ const state = {
   dismissed: new Set(),    // session ids the user removed from the board on purpose
   wsColors: new Map(),     // workspaceId -> colour
   stacked: new Map(),      // workspaceId -> true when folded into a stack cell
-  drawerWs: null,          // workspaceId whose drawer is open
+  groupView: null,         // workspaceId shown in the folder-style panel
 };
 
 const snap = (v) => Math.round(v / GRID) * GRID;
@@ -171,86 +171,184 @@ function ensureFrames() {
   }
 }
 
-// The fold indicator lives in the frame's own label row, not as a floating block
-// on the board: it must never cover cards or eat pan drags.
+// A workspace larger than STACK_LIMIT keeps a folded stack card on the board.
+// Clicking it opens the group as a centred panel that shows every member card
+// in a grid, mirroring the original plugin's "open the folder" behaviour.
 function renderStackCells() {
   canvasEl.querySelectorAll('.stack-cell').forEach((el) => el.remove());
-  // (the stacked counts are drawn by renderFrames inside each label)
+  const c = state.camera;
+  for (const w of state.workspaces) {
+    const { folded } = workspaceLayout(w);
+    if (folded.length === 0) continue;
+    const r = state.wsRect.get(w.workspaceId);
+    if (!r) continue;
+
+    const cell = document.createElement('div');
+    cell.className = 'stack-cell';
+    cell.style.left = (r.x * c.zoom + c.x) + 'px';
+    cell.style.top = ((r.y + r.h + 8) * c.zoom + c.y) + 'px';
+    cell.style.transform = 'scale(' + c.zoom + ')';
+    cell.style.transformOrigin = '0 0';
+
+    // Three stacked sheets, exactly like the original stack node.
+    for (const cls of ['stack-sheet-back', 'stack-sheet-mid']) {
+      const sheet = document.createElement('span');
+      sheet.className = cls;
+      cell.appendChild(sheet);
+    }
+    const face = document.createElement('div');
+    face.className = 'stack-face';
+    const faceTitle = document.createElement('span');
+    faceTitle.className = 'stack-face-title';
+    faceTitle.textContent = w.title;
+    face.appendChild(faceTitle);
+    const badge = document.createElement('span');
+    badge.className = 'stack-badge';
+    badge.textContent = '+' + folded.length;
+    face.appendChild(badge);
+    cell.appendChild(face);
+
+    cell.title = '展开这个分组的 ' + folded.length + ' 个对话';
+    cell.addEventListener('mousedown', (e) => e.stopPropagation());
+    cell.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openGroupView(w.workspaceId);
+    });
+    canvasEl.appendChild(cell);
+  }
 }
 
-function openDrawer(workspaceId) {
-  state.drawerWs = workspaceId;
-  renderDrawer();
+// The group view: a big centred panel listing every member as a card.
+function openGroupView(workspaceId) {
+  state.groupView = workspaceId;
+  renderGroupView();
 }
 
-function closeDrawer() {
-  state.drawerWs = null;
-  const el = document.getElementById('drawer');
+function closeGroupView() {
+  state.groupView = null;
+  const el = document.getElementById('groupview');
   if (el) el.remove();
 }
 
-async function renderDrawer() {
-  if (!state.drawerWs) { closeDrawer(); return; }
-  const w = state.workspaces.find((x) => x.workspaceId === state.drawerWs);
-  if (!w) { closeDrawer(); return; }
-  let el = document.getElementById('drawer');
-  if (el) el.remove();
-  el = document.createElement('div');
-  el.id = 'drawer';
+function renderGroupView() {
+  const wsId = state.groupView;
+  if (!wsId) { closeGroupView(); return; }
+  const w = state.workspaces.find((x) => x.workspaceId === wsId);
+  if (!w) { closeGroupView(); return; }
+
+  let back = document.getElementById('groupview');
+  if (back) back.remove();
+  back = document.createElement('div');
+  back.id = 'groupview';
+
+  const box = document.createElement('div');
+  box.className = 'gv-box';
 
   const head = document.createElement('div');
-  head.className = 'drawer-head';
-  const title = document.createElement('span');
-  title.className = 'drawer-title';
-  title.textContent = w.title + ' · 共 ' + w.sessionIds.length + ' 个对话';
-  head.appendChild(title);
+  head.className = 'gv-head';
+  const titleEl = document.createElement('span');
+  titleEl.className = 'gv-title';
+  titleEl.textContent = w.title;
+  head.appendChild(titleEl);
+  const countEl = document.createElement('span');
+  countEl.className = 'gv-count';
+  countEl.textContent = '共 ' + w.sessionIds.length + ' 个对话';
+  head.appendChild(countEl);
+  const spacer = document.createElement('span');
+  spacer.style.flex = '1';
+  head.appendChild(spacer);
+
   const search = document.createElement('input');
-  search.className = 'drawer-search';
-  search.placeholder = '搜这个分组里的对话';
+  search.className = 'gv-search';
+  search.placeholder = '搜这个分组里的卡片';
   head.appendChild(search);
+
   const close = document.createElement('button');
   close.className = 'panel-close';
   close.textContent = '✕';
-  close.addEventListener('click', closeDrawer);
+  close.title = '收起（Esc）';
+  close.addEventListener('click', closeGroupView);
   head.appendChild(close);
-  el.appendChild(head);
+  box.appendChild(head);
 
-  const list = document.createElement('div');
-  list.className = 'drawer-list';
-  el.appendChild(list);
+  const grid = document.createElement('div');
+  grid.className = 'gv-grid';
+  box.appendChild(grid);
 
-  const { members, folded } = workspaceLayout(w);
-  const rows = [...folded, ...members.filter((m) => !folded.includes(m))];
-  const paint = (filter) => {
-    list.innerHTML = '';
-    const q = (filter ?? '').trim().toLowerCase();
-    const shown = rows.filter((s) => !q || s.title.toLowerCase().includes(q) || (s.lastPrompt ?? '').toLowerCase().includes(q));
+  const memberSet = new Set(w.sessionIds);
+  const members = state.sessions.filter((x) => memberSet.has(x.sessionId));
+
+  const paint = (filterText) => {
+    grid.innerHTML = '';
+    const q = String(filterText ?? '').trim().toLowerCase();
+    const shown = members.filter((x) => !q || x.title.toLowerCase().includes(q));
     if (shown.length === 0) {
       const none = document.createElement('div');
-      none.className = 'drawer-empty';
+      none.className = 'gv-empty';
       none.textContent = '没有匹配的对话';
-      list.appendChild(none);
+      grid.appendChild(none);
       return;
     }
-    for (const s of shown) {
-      const row = document.createElement('div');
-      row.className = 'drawer-row' + (folded.includes(s) ? ' folded' : '');
-      const rowTitle = document.createElement('span');
-      rowTitle.className = 'drawer-row-title';
-      rowTitle.textContent = s.title;
-      row.appendChild(rowTitle);
-      const meta = document.createElement('span');
-      meta.className = 'drawer-row-meta';
-      meta.textContent = relTime(s.updatedAt);
-      row.appendChild(meta);
-      row.addEventListener('click', () => { closeDrawer(); selectSession(s.sessionId); focusCard(s.sessionId); });
-      list.appendChild(row);
+    for (const item of shown) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'gv-card';
+      card.dataset.sessionId = item.sessionId;
+
+      const top = document.createElement('div');
+      top.className = 'gv-card-top';
+      if (item.pinned) {
+        const pin = document.createElement('span');
+        pin.className = 'gv-pin';
+        pin.textContent = '📌';
+        top.appendChild(pin);
+      }
+      const t2 = document.createElement('span');
+      t2.className = 'gv-card-title';
+      t2.textContent = item.title;
+      top.appendChild(t2);
+      card.appendChild(top);
+
+      if (item.lastPrompt) {
+        const pv = document.createElement('div');
+        pv.className = 'gv-card-preview';
+        pv.textContent = item.lastPrompt;
+        card.appendChild(pv);
+      }
+
+      const foot = document.createElement('div');
+      foot.className = 'gv-card-meta';
+      const st2 = state.status.get(item.sessionId) || {};
+      const dot = document.createElement('span');
+      dot.className = 'card-dot' + (st2.running || item.running ? ' running' : '');
+      foot.appendChild(dot);
+      const tm = document.createElement('span');
+      tm.textContent = relTime(item.updatedAt);
+      foot.appendChild(tm);
+      card.appendChild(foot);
+
+      card.addEventListener('mousedown', (e) => e.stopPropagation());
+      card.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeGroupView();
+        selectSession(item.sessionId);
+      });
+      card.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openCardMenu(e.clientX, e.clientY, item);
+      });
+      grid.appendChild(card);
     }
   };
   paint('');
   search.addEventListener('input', () => paint(search.value));
 
-  document.getElementById('canvas-wrap').appendChild(el);
+  back.addEventListener('mousedown', (e) => {
+    if (e.target === back) closeGroupView();
+  });
+  back.appendChild(box);
+  document.getElementById('canvas-wrap').appendChild(back);
   setTimeout(() => search.focus(), 40);
 }
 
@@ -287,11 +385,11 @@ function renderFrames() {
       const foldBtn = document.createElement('button');
       foldBtn.className = 'frame-fold';
       foldBtn.textContent = '折叠 ' + folded.length + ' 个 ▸';
-      foldBtn.title = '打开抽屉查看被折叠的对话';
+      foldBtn.title = '展开这个分组';
       foldBtn.addEventListener('mousedown', (e) => e.stopPropagation());
       foldBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        openDrawer(w.workspaceId);
+        openGroupView(w.workspaceId);
       });
       label.appendChild(foldBtn);
     }
@@ -1484,7 +1582,7 @@ function renderHits(res) {
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   closeMenu();
-  if (state.drawerWs) { closeDrawer(); return; }
+  if (state.groupView) { closeGroupView(); return; }
   if (!panelEl.hidden) closePanel();
   else { state.selected = null; render(); }
 });
