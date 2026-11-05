@@ -41,6 +41,22 @@ token; `engine.mjs` exchanges that token for a session cookie and then talks to
 The engine paths are absolute in `electron/engine.mjs`; adjust `DSH_EXE` and
 `DSH_CLI` if your install differs.
 
+## 启动方式（Windows）
+
+三种都可以：
+
+1. **桌面快捷方式**：双击桌面的 **DSH Studio**
+2. **项目里的批处理**：双击 `E:\dsh-studio\启动 DSH Studio.cmd`
+3. **命令行**：
+   ```bash
+   cd /d E:\dsh-studio
+   node_modules\electron\dist\electron.exe .
+   ```
+
+第一次启动会花 5–10 秒（要拉起内核），之后界面直接可用。
+
+如果窗口没出现，看 `E:\dsh-studio\boot.log`，最后几行会写明卡在哪一步。
+
 ## Run
 
 ```bash
