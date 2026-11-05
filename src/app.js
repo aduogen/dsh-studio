@@ -2,6 +2,7 @@
 // clicking one opens a conversation panel inside the canvas (no navigation away).
 
 import { showMenu, closeMenu, toast, confirmDialog, promptDialog } from './menu.js';
+import { EDGE_KINDS, sideHandles, anchor, curvePath, distToSegment, buildInjectedText } from './edges.js';
 
 const canvasEl = document.getElementById('canvas');
 const statusEl = document.getElementById('status');
@@ -28,6 +29,9 @@ const state = {
   pinnedSet: new Set(),
   batchMode: false,
   picked: new Set(),
+  edges: [],               // {id, fromCardId, toCardId, kind, injectedText?}
+  connecting: null,        // {fromCardId, x, y} while dragging a new line
+  pendingSpawn: null,      // {fromCardId, flowX, flowY} while the preview is open
 };
 
 const snap = (v) => Math.round(v / GRID) * GRID;
@@ -143,6 +147,60 @@ function renderFrames() {
   }
 }
 
+function ensureEdgeLayer() {
+  let svg = document.getElementById('edges');
+  if (!svg) {
+    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = 'edges';
+    canvasEl.appendChild(svg);
+  }
+  return svg;
+}
+
+function cardRect(sessionId) {
+  const p = state.positions.get(sessionId);
+  if (!p) return null;
+  return { x: p.x, y: p.y, w: CARD_W, h: 132 };
+}
+
+function renderEdges() {
+  const svg = ensureEdgeLayer();
+  const c = state.camera;
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '100%');
+  svg.innerHTML = '';
+
+  const all = [...state.edges];
+  if (state.connecting) {
+    const a = cardRect(state.connecting.fromCardId);
+    if (a) all.push({ id: '__temp', fromCardId: state.connecting.fromCardId, pending: true });
+  }
+
+  for (const edge of all) {
+    const a = cardRect(edge.fromCardId);
+    if (!a) continue;
+    let p, q;
+    if (edge.pending) {
+      p = anchor(a, 'r', CARD_W, 132);
+      q = { x: state.connecting.x, y: state.connecting.y };
+    } else {
+      const b = cardRect(edge.toCardId);
+      if (!b) continue;
+      const hs = sideHandles(a, b, CARD_W, 132);
+      p = anchor(a, hs.from, CARD_W, 132);
+      q = anchor(b, hs.to, CARD_W, 132);
+    }
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', curvePath(
+      { x: p.x * c.zoom + c.x, y: p.y * c.zoom + c.y },
+      { x: q.x * c.zoom + c.x, y: q.y * c.zoom + c.y }
+    ));
+    path.setAttribute('class', 'edge' + (edge.pending ? ' pending' : '') + (edge.kind === 'full' ? ' full' : ''));
+    path.dataset.edgeId = edge.id;
+    svg.appendChild(path);
+  }
+}
+
 function applyCamera() {
   const c = state.camera;
   canvasEl.style.backgroundPosition = c.x + 'px ' + c.y + 'px';
@@ -155,6 +213,7 @@ function applyCamera() {
     el.style.transform = 'scale(' + c.zoom + ')';
   }
   renderFrames();
+  renderEdges();
 }
 
 function cardBadges(s) {
@@ -285,7 +344,16 @@ let render = function () {
     }
     card.appendChild(foot);
 
-    card.addEventListener('mousedown', (e) => startDrag(e, s.sessionId));
+    const grip = document.createElement('span');
+    grip.className = 'card-grip';
+    grip.title = '拖出连线';
+    grip.addEventListener('mousedown', (e) => startConnect(e, s.sessionId));
+    card.appendChild(grip);
+
+    card.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.card-grip')) return;
+      startDrag(e, s.sessionId);
+    });
     card.addEventListener('click', (e) => {
       e.stopPropagation();
       if (state.batchMode || e.ctrlKey || e.metaKey) {
@@ -478,6 +546,183 @@ async function renameWorkspace(w) {
   render();
 }
 
+// ---- connecting -----------------------------------------------------------
+
+function startConnect(e, sessionId) {
+  e.stopPropagation();
+  e.preventDefault();
+  const rect = canvasEl.getBoundingClientRect();
+  state.connecting = {
+    fromCardId: sessionId,
+    x: (e.clientX - rect.left - state.camera.x) / state.camera.zoom,
+    y: (e.clientY - rect.top - state.camera.y) / state.camera.zoom,
+  };
+  document.addEventListener('mousemove', onConnectMove);
+  document.addEventListener('mouseup', endConnect, { once: true });
+  renderEdges();
+}
+
+function onConnectMove(e) {
+  if (!state.connecting) return;
+  const rect = canvasEl.getBoundingClientRect();
+  state.connecting.x = (e.clientX - rect.left - state.camera.x) / state.camera.zoom;
+  state.connecting.y = (e.clientY - rect.top - state.camera.y) / state.camera.zoom;
+  renderEdges();
+}
+
+function endConnect(e) {
+  document.removeEventListener('mousemove', onConnectMove);
+  const conn = state.connecting;
+  state.connecting = null;
+  if (!conn) { renderEdges(); return; }
+
+  // Did the drop land on another card? Then it is a plain link, not a spawn.
+  const rect = canvasEl.getBoundingClientRect();
+  const px = e.clientX, py = e.clientY;
+  const target = document.elementsFromPoint(px, py)
+    .map((el) => el.closest && el.closest('.card'))
+    .find((el) => el !== null && el.closest('.card') !== null);
+  const targetCard = target ? target.closest('.card') : null;
+  const targetId = targetCard?.dataset.sessionId;
+  if (targetId && targetId !== conn.fromCardId) {
+    addEdge(conn.fromCardId, targetId, 'none');
+    return;
+  }
+  // Otherwise: dropped on empty space -> offer to spawn a new conversation there.
+  state.pendingSpawn = { fromCardId: conn.fromCardId, flowX: conn.x, flowY: conn.y };
+  openSpawnPreview();
+}
+
+function removeEdge(id) {
+  const edge = state.edges.find((x) => x.id === id);
+  if (!edge) return;
+  state.edges = state.edges.filter((x) => x.id !== id);
+  window.studio.saveEdges(state.edges);
+  renderEdges();
+  toast('已删除连线');
+}
+
+function addEdge(fromCardId, toCardId, kind, injectedText) {
+  const id = 'e' + Math.random().toString(36).slice(2, 9);
+  state.edges.push({ id, fromCardId, toCardId, kind, injectedText });
+  window.studio.saveEdges(state.edges);
+  renderEdges();
+  return id;
+}
+
+// ---- spawn preview ---------------------------------------------------------
+
+async function openSpawnPreview() {
+  const pending = state.pendingSpawn;
+  if (!pending) return;
+  const from = state.byId.get(pending.fromCardId);
+  let existing = document.getElementById('spawn');
+  if (existing) existing.remove();
+
+  const box = document.createElement('div');
+  box.id = 'spawn';
+  box.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'spawn-head';
+  head.textContent = '连线分叉：开一个带上下文的新对话';
+  const close = document.createElement('button');
+  close.className = 'panel-close';
+  close.textContent = '✕';
+  close.addEventListener('click', closeSpawn);
+  head.appendChild(close);
+  box.appendChild(head);
+
+  const fromLine = document.createElement('div');
+  fromLine.className = 'spawn-from';
+  fromLine.textContent = '来源：' + (from?.title ?? pending.fromCardId);
+  box.appendChild(fromLine);
+
+  // mode picker
+  const modes = document.createElement('div');
+  modes.className = 'spawn-modes';
+  let mode = 'digest';
+  const buttons = {};
+  for (const [key, spec] of Object.entries(EDGE_KINDS)) {
+    const b = document.createElement('button');
+    b.className = 'spawn-mode' + (key === mode ? ' active' : '');
+    b.textContent = spec.label;
+    b.addEventListener('click', () => {
+      mode = key;
+      for (const [k, el] of Object.entries(buttons)) el.classList.toggle('active', k === mode);
+      hint.textContent = EDGE_KINDS[mode].hint;
+      textarea.style.display = mode === 'full' ? 'none' : '';
+    });
+    buttons[key] = b;
+    modes.appendChild(b);
+  }
+  box.appendChild(modes);
+
+  const hint = document.createElement('div');
+  hint.className = 'spawn-hint';
+  hint.textContent = EDGE_KINDS[mode].hint;
+  box.appendChild(hint);
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'spawn-text';
+  textarea.placeholder = '将要注入的内容，可编辑…';
+  box.appendChild(textarea);
+
+  // prefill from the source digest
+  const dg = await window.studio.digest(pending.fromCardId).catch(() => null);
+  if (dg?.ok && dg.value) {
+    textarea.value = buildInjectedText(from?.title ?? '原会话', dg.value);
+  }
+
+  const foot = document.createElement('div');
+  foot.className = 'spawn-foot';
+  const cancel = document.createElement('button');
+  cancel.className = 'dlg-btn';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', closeSpawn);
+  const ok = document.createElement('button');
+  ok.className = 'dlg-btn dlg-primary';
+  ok.textContent = '开新对话';
+  foot.appendChild(cancel);
+  foot.appendChild(ok);
+  box.appendChild(foot);
+
+  ok.addEventListener('click', async () => {
+    ok.disabled = true;
+    ok.textContent = '创建中…';
+    const res = await window.studio.spawn({
+      fromSessionId: pending.fromCardId,
+      mode,
+      text: mode === 'full' ? undefined : textarea.value,
+    });
+    if (!res?.ok) {
+      toast('创建失败: ' + String(res?.error ?? '').slice(0, 60), 'error');
+      ok.disabled = false;
+      ok.textContent = '开新对话';
+      return;
+    }
+    // the new card belongs next to where the line was dropped
+    const newId = res.sessionId;
+    state.positions.set(newId, {
+      x: snap(pending.flowX - CARD_W / 2),
+      y: snap(pending.flowY - 66),
+    });
+    window.studio.savePosition(newId, state.positions.get(newId));
+    closeSpawn();
+    toast('已创建新对话');
+    await reload();
+    selectSession(newId);
+  });
+
+  document.getElementById('canvas-wrap').appendChild(box);
+}
+
+function closeSpawn() {
+  const el = document.getElementById('spawn');
+  if (el) el.remove();
+  state.pendingSpawn = null;
+}
+
 function startDrag(e, sessionId) {
   if (e.button !== 0) return;
   e.stopPropagation();
@@ -532,6 +777,15 @@ function endPan() {
   document.removeEventListener('mousemove', onPan);
 }
 
+canvasEl.addEventListener('click', (e) => {
+  const path = e.target.closest && e.target.closest('path.edge');
+  if (!path) return;
+  const id = path.dataset.edgeId;
+  if (!id || id === '__temp') return;
+  e.stopPropagation();
+  removeEdge(id);
+});
+
 canvasEl.addEventListener('wheel', (e) => {
   e.preventDefault();
   const c = state.camera;
@@ -575,6 +829,11 @@ async function reload() {
         state.workspaces = wz.value.items ?? [];
         state.pinnedSet = new Set(wz.value.pinnedSessionIds ?? []);
       }
+    } catch {}
+
+    try {
+      const savedEdges = await window.studio.loadEdges();
+      if (Array.isArray(savedEdges)) state.edges = savedEdges;
     } catch {}
 
     const saved = await window.studio.loadLayout();

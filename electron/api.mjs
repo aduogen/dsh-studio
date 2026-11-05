@@ -1,4 +1,5 @@
 // Typed access to the engine's endpoints, with the arg-field quirk handled in one place.
+import { randomUUID } from 'node:crypto';
 import { Engine } from './engine.mjs';
 import { WebSocket } from 'ws';
 
@@ -102,6 +103,36 @@ export class StudioApi {
     } finally {
       try { ws.close(); } catch {}
     }
+  }
+
+  // --- fork / spawn ---------------------------------------------------------
+  createSession(workspaceId) {
+    return this.call('session/create', workspaceId ? { workspaceId } : {});
+  }
+
+  sendPrompt(sessionId, text) {
+    return this.call('session/prompt', {
+      requestId: randomUUID(),
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text }],
+    });
+  }
+
+  forkSession(sessionId, atSeq) {
+    return this.call('session/fork', atSeq === undefined ? { sessionId } : { sessionId, atSeq });
+  }
+
+  // A digest-shaped summary built from the turn outline, used as injected context.
+  async digestOf(sessionId) {
+    const pj = await this.call('session/projections', { sessionId });
+    const outline = pj?.values?.turnOutline ?? [];
+    const last = outline[outline.length - 1];
+    return {
+      turns: outline.length,
+      summary: last?.prompt ? String(last.prompt).slice(0, 400) : '',
+      findings: last?.response ? String(last.response).slice(0, 400) : '',
+    };
   }
 
   rename(sessionId, title) { return this.call('session/rename', { sessionId, title }); }

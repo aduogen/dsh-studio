@@ -48,6 +48,36 @@ ipcMain.handle('engine:invoke', async (_event, endpoint, args) => {
 });
 
 ipcMain.handle('board:get', async () => await api.fastBoard());
+ipcMain.handle('spawn:run', async (_e, opts) => {
+  try {
+    const { fromSessionId, mode, text, x, y } = opts ?? {};
+    const result = { ok: true };
+    if (mode === 'full') {
+      // Native fork: the new session carries the whole history.
+      const forked = await api.forkSession(fromSessionId);
+      result.sessionId = forked?.sessionId ?? forked?.value?.sessionId;
+    } else {
+      const ws = await api.workspaceBaseline();
+      const created = await api.createSession(ws.items[0]?.workspaceId);
+      result.sessionId = created?.sessionId;
+      if (mode === 'digest' && text) {
+        await api.sendPrompt(result.sessionId, text);
+      } else if (mode === 'none' && text) {
+        await api.sendPrompt(result.sessionId, text);
+      }
+    }
+    if (!result.sessionId) return { ok: false, error: '内核没有返回新的会话 ID' };
+    return result;
+  } catch (err) {
+    return { ok: false, error: String(err.message ?? err) };
+  }
+});
+
+ipcMain.handle('digest:get', async (_e, sessionId) => {
+  try { return { ok: true, value: await api.digestOf(sessionId) }; }
+  catch (err) { return { ok: false, error: String(err.message ?? err) }; }
+});
+
 ipcMain.handle('workspaces:get', async () => {
   try { return { ok: true, value: await api.workspaceBaseline() }; }
   catch (err) { return { ok: false, error: String(err.message ?? err) }; }
@@ -91,6 +121,16 @@ ipcMain.handle('layout:load', async () => {
   } catch {
     return {};
   }
+});
+
+const edgesFile = () => path.join(app.getPath('userData'), 'canvas-edges.json');
+
+ipcMain.handle('edges:load', async () => {
+  try { return JSON.parse(fs.readFileSync(edgesFile(), 'utf8')); } catch { return []; }
+});
+
+ipcMain.handle('edges:save', async (_e, edges) => {
+  try { fs.writeFileSync(edgesFile(), JSON.stringify(edges ?? []), 'utf8'); return true; } catch { return false; }
 });
 
 ipcMain.handle('layout:save', async (_event, positions) => {
@@ -137,40 +177,39 @@ if (process.argv.includes('--dump')) {
       try {
         const info = await win.webContents.executeJavaScript(`(async () => {
           const wait = (ms) => new Promise(r => setTimeout(r, ms));
-          await wait(3000);
+          await wait(3200);
           const out = {};
-          const dbg = window.__studioDebug;
-          out.hasDebug = !!dbg;
-          if (!dbg) return out;
+          out.status = document.getElementById('status')?.textContent;
+          out.cards = document.querySelectorAll('.card').length;
+          out.frames = document.querySelectorAll('.frame').length;
 
-          // 1. rail hidden with nothing running
-          const rail = document.getElementById('rail');
-          out.hiddenWhenIdle = rail.hidden;
-
-          // 2. simulate 2 running sessions
-          const ids = dbg.state.sessions.slice(0, 2).map(s => s.sessionId);
-          dbg.setRunning(ids);
-          await wait(300);
-          out.railVisible = !rail.hidden;
-          out.railRows = rail.querySelectorAll('.rail-row').length;
-          out.railHead = rail.querySelector('.rail-head')?.textContent;
-          out.railTitles = [...rail.querySelectorAll('.rail-title')].map(e => e.textContent.slice(0, 20));
-
-          // 3. running cards show the lamp
-          out.cardsWithRunningLamp = document.querySelectorAll('.card-dot.running').length;
-
-          // 4. clicking a rail row focuses that card (opens the panel too)
-          const row = rail.querySelector('.rail-row');
-          row.click();
-          await wait(4500);
-          out.railClickOpensPanel = document.getElementById('panel')?.hidden === false;
+          // F1 menu
+          const card = document.querySelector('.card');
+          card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 300, clientY: 300 }));
+          await wait(250);
+          out.menuItems = [...(document.querySelector('.ctx-menu')?.querySelectorAll('.ctx-item') ?? [])].map(e => e.textContent).length;
           document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-          await wait(200);
+          await wait(150);
 
-          // 5. rail disappears when nothing runs again
+          // F2 frames + drag
+          const label = document.querySelector('.frame-label');
+          out.frameDraggable = getComputedStyle(label).pointerEvents === 'auto';
+
+          // F3 rail
+          const dbg = window.__studioDebug;
+          dbg.setRunning(dbg.state.sessions.slice(0,1).map(s => s.sessionId));
+          await wait(250);
+          out.railRows = document.querySelectorAll('.rail-row').length;
           dbg.setRunning([]);
-          await wait(300);
-          out.hiddenAfterIdle = rail.hidden;
+
+          // F4 edges
+          out.gripCount = document.querySelectorAll('.card-grip').length;
+
+          // F5 panel
+          card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          await wait(4500);
+          out.panelTurns = document.getElementById('panel')?.querySelectorAll('.turn').length ?? 0;
+          out.panelOpen = document.getElementById('panel')?.hidden === false;
           return out;
         })()`);
         fs.writeFileSync(path.join(__dirname, '..', 'dom.json'), JSON.stringify(info, null, 2));
