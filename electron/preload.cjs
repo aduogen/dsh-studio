@@ -4,6 +4,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('studio', {
   status: () => ipcRenderer.invoke('engine:status'),
   invoke: (endpoint, args) => ipcRenderer.invoke('engine:invoke', endpoint, args),
+  board: () => ipcRenderer.invoke('board:get'),
+  detail: (sessionId) => ipcRenderer.invoke('session:detail', sessionId),
+  running: (ids) => ipcRenderer.invoke('board:running', ids),
+  action: (name, sessionId, extra) => ipcRenderer.invoke('action:run', name, sessionId, extra),
   loadLayout: () => ipcRenderer.invoke('layout:load'),
   savePosition: (sessionId, pos) =>
     ipcRenderer.invoke('layout:save', { [sessionId]: pos }),

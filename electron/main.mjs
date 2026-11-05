@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Engine } from './engine.mjs';
+import { StudioApi } from './api.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // DIAG_LOG: main-process trace to a file (Windows GUI has no console).
@@ -13,6 +14,7 @@ process.on('uncaughtException', (e) => diag('UNCAUGHT ' + (e.stack ?? e.message)
 process.on('unhandledRejection', (e) => diag('UNHANDLED ' + String(e)));
 diag('main module loaded, electron ' + process.versions.electron);
 const engine = new Engine();
+const api = new StudioApi(engine);
 let win = null;
 
 function createWindow() {
@@ -44,6 +46,26 @@ function createWindow() {
 ipcMain.handle('engine:invoke', async (_event, endpoint, args) => {
   return await engine.call(endpoint, args ?? {});
 });
+
+ipcMain.handle('board:get', async () => await api.fastBoard());
+ipcMain.handle('session:detail', async (_e, sessionId) => await api.sessionDetail(sessionId));
+ipcMain.handle('action:run', async (_e, action, sessionId, extra) => {
+  try {
+    switch (action) {
+      case 'pin': await api.pin(sessionId); return { ok: true };
+      case 'unpin': await api.unpin(sessionId); return { ok: true };
+      case 'rename': await api.rename(sessionId, String(extra ?? '')); return { ok: true };
+      case 'archive': await api.archive(sessionId, true); return { ok: true };
+      case 'cancel': await api.cancel(sessionId); return { ok: true };
+      case 'delete': await api.archive(sessionId, true); await api.deleteSession(sessionId); return { ok: true };
+      default: return { ok: false, error: 'unknown action ' + action };
+    }
+  } catch (err) {
+    return { ok: false, error: String(err.message ?? err) };
+  }
+});
+
+ipcMain.handle('board:running', async (_e, ids) => await api.runningStates(ids ?? []));
 
 ipcMain.handle('engine:status', async () => {
   try {
@@ -107,13 +129,31 @@ if (process.argv.includes('--dump')) {
   app.whenReady().then(() => {
     setTimeout(async () => {
       try {
-        const info = await win.webContents.executeJavaScript(`(() => ({
-          status: document.getElementById('status')?.textContent,
-          cards: document.querySelectorAll('.card').length,
-          titles: [...document.querySelectorAll('.card-title')].slice(0,8).map(e => e.textContent),
-          running: document.querySelectorAll('.card-dot.running').length,
-          hasStudio: typeof window.studio,
-        }))()`);
+        const info = await win.webContents.executeJavaScript(`(async () => {
+          const wait = (ms) => new Promise(r => setTimeout(r, ms));
+          const out = {};
+          out.cards = document.querySelectorAll('.card').length;
+          // panel still works
+          const card = document.querySelector('.card');
+          card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          await wait(4500);
+          const panel = document.getElementById('panel');
+          out.panelOpen = panel ? !panel.hidden : null;
+          out.panelTurns = panel?.querySelectorAll('.turn').length ?? 0;
+          // menu still works, over the panel
+          card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 260, clientY: 260 }));
+          await wait(250);
+          const menu = document.querySelector('.ctx-menu');
+          out.menuOpen = !!menu;
+          out.menuItems = menu ? [...menu.querySelectorAll('.ctx-item')].map(e => e.textContent) : [];
+          // toast renders
+          const ev = new KeyboardEvent('keydown', { key: 'Escape' });
+          document.dispatchEvent(ev);
+          await wait(150);
+          out.menuClosedByEsc = !document.querySelector('.ctx-menu');
+          out.panelClosedByEsc = document.getElementById('panel')?.hidden ?? null;
+          return out;
+        })()`);
         fs.writeFileSync(path.join(__dirname, '..', 'dom.json'), JSON.stringify(info, null, 2));
         diag('dom dumped');
       } catch (e) { diag('dom dump failed: ' + String(e)); }
