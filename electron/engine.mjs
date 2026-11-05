@@ -94,13 +94,13 @@ export class Engine {
   }
 
   // One typed RPC call. The kernel wants exactly one plain-object args field named _request.
-  async call(endpoint, args = {}) {
+  async call(endpoint, args = {}, argField = '_request') {
     if (!this.origin) await this.start();
     const payload = JSON.stringify({
       type: 'client-request',
       rpcId: 'r' + Math.random().toString(36).slice(2) + Date.now().toString(36),
       method: endpoint,
-      payload: { args: { _request: {}, ...args } },
+      payload: { args: { [argField]: {}, ...args } },
     });
     const res = await this.#raw('POST', '/api/' + endpoint, payload);
     if (res.status === 401) {

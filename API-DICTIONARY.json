@@ -1,0 +1,1202 @@
+{
+  "dsh-api-account-controller": [
+    {
+      "ep": "account/ackBonusNotified",
+      "desc": "Record one displayed bonus as notified for the account it belongs to.",
+      "params": [
+        {
+          "name": "accountId",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "orderId",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "account/cancelSignIn",
+      "desc": "Cancel the named local attempt.",
+      "params": [
+        {
+          "name": "attemptId",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "account/getBalance",
+      "desc": "Query Platform recharge-wallet balances.",
+      "params": [
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "account/getProfile",
+      "desc": "Query display-safe Platform profile data.",
+      "params": [
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "account/getState",
+      "desc": "Read the safe account projection.",
+      "params": [
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "account/getUnnotifiedBonuses",
+      "desc": "Query the granted bonuses Platform has not yet recorded as displayed.",
+      "params": [
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "account/hasRunningAccountTasks",
+      "desc": "Inspect the latest logged request providers of running tasks, including tools and retries.",
+      "params": [
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "account/signOut",
+      "desc": "Remove the local account grant and revoke it through Platform in the background, without deleting API keys.",
+      "params": [
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "account/startSignIn",
+      "desc": "Begin browser sign-in.",
+      "params": [
+        {
+          "name": "client",
+          "schema": "{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"},\"locale\":{\"type\":\"string\",\"description\":\"Active UI language; only its primary subtag selects the Platform wire locale.\"},\"timezoneOffsetSeconds\":{\"type\":\"number\",\"description\":\"Offset from UTC in seconds, positive east of Greenwich.\"}},\"required\":[\"version\",\"locale\",\"timezoneOffsetSeconds\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "callbackOrigin",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "loginSource",
+          "schema": "{\"type\":\"string\",\"enum\":[\"web\",\"desktop\"]}"
+        }
+      ]
+    },
+    {
+      "ep": "account/watch",
+      "desc": "Stream the safe account projection.",
+      "params": []
+    },
+    {
+      "ep": "account/watchExpiry",
+      "desc": "Subscribe to credential expiry without replaying prior notifications.",
+      "params": []
+    }
+  ],
+  "dsh-api-job-controller": [
+    {
+      "ep": "job/follow",
+      "desc": "Stream one job\\",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\",\"description\":\"Owning session for the fenced read. Omitted for an unowned job, which any caller may observe.\"},\"jobId\":{\"type\":\"string\"},\"from\":{\"type\":\"number\",\"description\":\"Absolute byte offset to resume from (a prior frame's `next`). Omitted, the stream starts at the oldest retained byte.\"}},\"required\":[\"jobId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "job/kill",
+      "desc": "Kill one background job on a human\\",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\",\"description\":\"Session whose job list carries the job; the fenced lookup reads as it.\"},\"jobId\":{\"type\":\"string\"}},\"required\":[\"sessionId\",\"jobId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "job/list",
+      "desc": "Stream the jobs one session can see — its own plus every unowned job — as whole-set frames: one on open, then one after each coalesced burst of lifecycle commits. The stream has no natural end; the carrier closes it.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    }
+  ],
+  "dsh-api-session-controller": [
+    {
+      "ep": "session/attachment",
+      "desc": "Read one image from the attachment store after gateway authorization.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\",\"description\":\"Gateway permission scope only; neither Session existence nor its image references are checked.\"},\"attachment\":{\"type\":\"object\",\"properties\":{\"attachmentId\":{\"type\":\"string\",\"description\":\"Opaque storage identifier; never a filesystem path or bearer URL.\"},\"mediaType\":{\"type\":\"string\",\"enum\":[\"image/png\",\"image/jpeg\",\"image/webp\",\"image/gif\"],\"description\":\"Media type verified from the stored bytes.\"},\"bytes\":{\"type\":\"number\",\"description\":\"Exact encoded byte length.\"},\"width\":{\"type\":\"number\",\"description\":\"Intrinsic encoded width in pixels.\"},\"height\":{\"type\":\"number\",\"description\":\"Intrinsic encoded height in pixels.\"},\"name\":{\"type\":\"string\",\"description\":\"Optional display name stripped of local path information.\"},\"originalDimensions\":{\"type\":\"object\",\"properties\":{\"width\":{\"type\":\"number\"},\"height\":{\"type\":\"number\"}},\"required\":[\"width\",\"height\"],\"additionalProperties\":true,\"description\":\"Input dimensions after applying EXIF orientation and before normalization scaling. Present only when normalization reduced the image.\"}},\"required\":[\"attachmentId\",\"mediaType\",\"bytes\",\"width\",\"height\"],\"additionalProperties\":true}},\"required\":[\"sessionId\",\"attachment\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/cancel",
+      "desc": "Cancel one active Agent turn without dropping its pending inbox.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/canOpenWorkspacePath",
+      "desc": "Report whether this deployment can hand a Session workspace path to a native desktop.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\",\"description\":\"Workspace the Session joins; exclusive with `cwd`.\"},\"cwd\":{\"type\":\"string\",\"description\":\"Directory the Session owns when no Workspace is named.\"},\"sessionId\":{\"type\":\"string\",\"description\":\"Blank Session to reuse while it is reusable, or the identity of a new Session when none is stored under it.\"},\"agentPreset\":{\"type\":\"string\",\"description\":\"Preset the Session runs, replacing a reused Session's recorded preset; the configured default when omitted.\"}},\"required\":[],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/control",
+      "desc": "Stream a complete live-control baseline followed by replacement frames.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\",\"description\":\"Workspace the Session joins; exclusive with `cwd`.\"},\"cwd\":{\"type\":\"string\",\"description\":\"Directory the Session owns when no Workspace is named.\"},\"sessionId\":{\"type\":\"string\",\"description\":\"Blank Session to reuse while it is reusable, or the identity of a new Session when none is stored under it.\"},\"agentPreset\":{\"type\":\"string\",\"description\":\"Preset the Session runs, replacing a reused Session's recorded preset; the configured default when omitted.\"}},\"required\":[],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/create",
+      "desc": "Create one ordinary Session for a new conversation, reusing the named blank Session while it is reusable.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\",\"description\":\"Workspace the Session joins; exclusive with `cwd`.\"},\"cwd\":{\"type\":\"string\",\"description\":\"Directory the Session owns when no Workspace is named.\"},\"sessionId\":{\"type\":\"string\",\"description\":\"Blank Session to reuse while it is reusable, or the identity of a new Session when none is stored under it.\"},\"agentPreset\":{\"type\":\"string\",\"description\":\"Preset the Session runs, replacing a reused Session's recorded preset; the configured default when omitted.\"}},\"required\":[],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/events",
+      "desc": "Read one cold-safe, message-aligned Session history page.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"address\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"session\"},\"sessionId\":{\"type\":\"string\"}},\"required\":[\"kind\",\"sessionId\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"subagent\"},\"parentSessionId\":{\"type\":\"string\"},\"childSessionId\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\",\"enum\":[\"one-shot\",\"continuable\",\"unknown\"]}},\"required\":[\"kind\",\"parentSessionId\",\"childSessionId\",\"mode\"],\"additionalProperties\":true}]},\"throughSeq\":{\"type\":\"number\",\"description\":\"Inclusive log cut; omission selects the observed log end. A follow opening reports the cut it covered so a caller can pin the same point.\"},\"beforeSeq\":{\"type\":\"number\"},\"maxMessages\":{\"type\":\"number\"},\"turnWindow\":{\"type\":\"object\",\"properties\":{\"minMessages\":{\"type\":\"number\",\"description\":\"Minimum append-origin user/assistant messages; must not exceed maxMessages.\"},\"minTurns\":{\"type\":\"number\",\"description\":\"Minimum Turn starts crossed, including the partial Turn at beforeSeq.\"}},\"required\":[\"minMessages\",\"minTurns\"],\"additionalProperties\":true,\"description\":\"Stop at a Turn start after both minima, unless maxMessages or history exhaustion wins.\"}},\"required\":[\"address\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/follow",
+      "desc": "Follow one Session log from its opening or resume cursor.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"address\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"session\"},\"sessionId\":{\"type\":\"string\"}},\"required\":[\"kind\",\"sessionId\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"subagent\"},\"parentSessionId\":{\"type\":\"string\"},\"childSessionId\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\",\"enum\":[\"one-shot\",\"continuable\",\"unknown\"]}},\"required\":[\"kind\",\"parentSessionId\",\"childSessionId\",\"mode\"],\"additionalProperties\":true}]},\"activate\":{\"type\":\"boolean\",\"description\":\"Request background activation; omission leaves the read passive.\"},\"assistantStream\":{\"type\":\"boolean\",\"const\":true,\"description\":\"Include process-local assistant presentation frames for the Web client.\"},\"maxMessages\":{\"type\":\"number\"},\"turnWindow\":{\"type\":\"object\",\"properties\":{\"minMessages\":{\"type\":\"number\",\"description\":\"Minimum append-origin user/assistant messages; must not exceed maxMessages.\"},\"minTurns\":{\"type\":\"number\",\"description\":\"Minimum Turn starts crossed, including the partial Turn at beforeSeq.\"}},\"required\":[\"minMessages\",\"minTurns\"],\"additionalProperties\":true,\"description\":\"Stop at a Turn start after both minima, unless maxMessages or history exhaustion wins.\"}},\"required\":[\"address\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/fork",
+      "desc": "Fork one cold-readable exact event prefix into a new Session. An omitted boundary selects the latest completed-turn prefix; an open cut receives synthetic fork closers.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"},\"atSeq\":{\"type\":\"number\",\"description\":\"Exact inclusive source event seq; omission selects the latest completed-turn prefix.\"},\"allowMigration\":{\"type\":\"boolean\",\"description\":\"False asks the Host to check for required migration before forking. Defaults to true.\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "_request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"cursor\":{\"type\":\"string\"}},\"required\":[],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/initializeDefaultModel",
+      "desc": "Select the first available account model after login when no provider API key is configured.",
+      "params": [
+        {
+          "name": "_request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"cursor\":{\"type\":\"string\"}},\"required\":[],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/list",
+      "desc": "Read all visible Session rows without resuming an Agent.",
+      "params": [
+        {
+          "name": "_request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"cursor\":{\"type\":\"string\"}},\"required\":[],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"address\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"session\"},\"sessionId\":{\"type\":\"string\"}},\"required\":[\"kind\",\"sessionId\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"subagent\"},\"parentSessionId\":{\"type\":\"string\"},\"childSessionId\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\",\"enum\":[\"one-shot\",\"continuable\",\"unknown\"]}},\"required\":[\"kind\",\"parentSessionId\",\"childSessionId\",\"mode\"],\"additionalProperties\":true}]}},\"required\":[\"address\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/modelCatalog",
+      "desc": "Describe every currently routable model for Host-generation selectors.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"address\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"session\"},\"sessionId\":{\"type\":\"string\"}},\"required\":[\"kind\",\"sessionId\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"subagent\"},\"parentSessionId\":{\"type\":\"string\"},\"childSessionId\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\",\"enum\":[\"one-shot\",\"continuable\",\"unknown\"]}},\"required\":[\"kind\",\"parentSessionId\",\"childSessionId\",\"mode\"],\"additionalProperties\":true}]}},\"required\":[\"address\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/observeEvent",
+      "desc": "Subscribe to Session events without reading a snapshot.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"address\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"session\"},\"sessionId\":{\"type\":\"string\"}},\"required\":[\"kind\",\"sessionId\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"subagent\"},\"parentSessionId\":{\"type\":\"string\"},\"childSessionId\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\",\"enum\":[\"one-shot\",\"continuable\",\"unknown\"]}},\"required\":[\"kind\",\"parentSessionId\",\"childSessionId\",\"mode\"],\"additionalProperties\":true}]}},\"required\":[\"address\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/observeProjections",
+      "desc": "Subscribe to Session projection changes.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/observeState",
+      "desc": "Subscribe to complete Session state replacements.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\",\"const\":\"reveal\",\"description\":\"File-manager navigation when requested; omission uses the default application.\"},\"application\":{\"type\":\"string\",\"description\":\"Registered application identifier; ignored for reveal. Omission preserves the operating system default.\"},\"path\":{\"type\":\"string\",\"description\":\"Path after best-effort Session workspace resolution, in Host filesystem syntax.\"}},\"required\":[\"path\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/openWorkspacePath",
+      "desc": "Verify one path through the composed filesystem and open it on the Host desktop.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\",\"const\":\"reveal\",\"description\":\"File-manager navigation when requested; omission uses the default application.\"},\"application\":{\"type\":\"string\",\"description\":\"Registered application identifier; ignored for reveal. Omission preserves the operating system default.\"},\"path\":{\"type\":\"string\",\"description\":\"Path after best-effort Session workspace resolution, in Host filesystem syntax.\"}},\"required\":[\"path\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/page",
+      "desc": "Read one cold-safe, message-aligned Session history page.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"address\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"session\"},\"sessionId\":{\"type\":\"string\"}},\"required\":[\"kind\",\"sessionId\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"subagent\"},\"parentSessionId\":{\"type\":\"string\"},\"childSessionId\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\",\"enum\":[\"one-shot\",\"continuable\",\"unknown\"]}},\"required\":[\"kind\",\"parentSessionId\",\"childSessionId\",\"mode\"],\"additionalProperties\":true}]},\"throughSeq\":{\"type\":\"number\",\"description\":\"Inclusive log cut; omission selects the observed log end. A follow opening reports the cut it covered so a caller can pin the same point.\"},\"beforeSeq\":{\"type\":\"number\"},\"maxMessages\":{\"type\":\"number\"},\"turnWindow\":{\"type\":\"object\",\"properties\":{\"minMessages\":{\"type\":\"number\",\"description\":\"Minimum append-origin user/assistant messages; must not exceed maxMessages.\"},\"minTurns\":{\"type\":\"number\",\"description\":\"Minimum Turn starts crossed, including the partial Turn at beforeSeq.\"}},\"required\":[\"minMessages\",\"minTurns\"],\"additionalProperties\":true,\"description\":\"Stop at a Turn start after both minima, unless maxMessages or history exhaustion wins.\"}},\"required\":[\"address\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/projections",
+      "desc": "Read exact projections, returning cached hints only when migration is required.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"requestId\":{\"type\":\"string\",\"description\":\"Client-minted identity persisted on the exact accepted user message.\"},\"sessionId\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\",\"enum\":[\"queue\",\"steer\"]},\"content\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}},\"required\":[\"type\",\"text\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"image\"},\"mediaType\":{\"type\":\"string\",\"enum\":[\"image/png\",\"image/jpeg\",\"image/webp\",\"image/gif\"]},\"data\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"}},\"required\":[\"type\",\"mediaType\",\"data\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"file\"},\"receiptId\":{\"type\":\"string\"}},\"required\":[\"type\",\"receiptId\"],\"additionalProperties\":true}]},\"description\":\"At least one non-whitespace text part or attachment.\"},\"clientTimeZone\":{\"type\":\"string\"}},\"required\":[\"requestId\",\"sessionId\",\"mode\",\"content\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/prompt",
+      "desc": "Admit one prompt after explicitly resuming its Session.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"requestId\":{\"type\":\"string\",\"description\":\"Client-minted identity persisted on the exact accepted user message.\"},\"sessionId\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\",\"enum\":[\"queue\",\"steer\"]},\"content\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}},\"required\":[\"type\",\"text\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"image\"},\"mediaType\":{\"type\":\"string\",\"enum\":[\"image/png\",\"image/jpeg\",\"image/webp\",\"image/gif\"]},\"data\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"}},\"required\":[\"type\",\"mediaType\",\"data\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"file\"},\"receiptId\":{\"type\":\"string\"}},\"required\":[\"type\",\"receiptId\"],\"additionalProperties\":true}]},\"description\":\"At least one non-whitespace text part or attachment.\"},\"clientTimeZone\":{\"type\":\"string\"}},\"required\":[\"requestId\",\"sessionId\",\"mode\",\"content\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/rename",
+      "desc": "Rename one Session after explicitly resuming it.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"sessionId\",\"title\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/search",
+      "desc": "Search visible Session content without resuming an Agent. A non-owner receives only the hits whose Session `allows()` admits; `hasMore` describes the bounded result before that filtering.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"},\"provider\":{\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"reasoningEffort\":{\"type\":\"string\"}},\"required\":[\"sessionId\",\"provider\",\"model\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/selectModel",
+      "desc": "Select one Session-local model after explicitly resuming the Session; save the default in the background.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"},\"provider\":{\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"reasoningEffort\":{\"type\":\"string\"}},\"required\":[\"sessionId\",\"provider\",\"model\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/state",
+      "desc": "Read passive Session state.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"},\"itemId\":{\"type\":\"string\"},\"action\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"edit\"},\"content\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}},\"required\":[\"type\",\"text\"],\"additionalProperties\":true},\"description\":\"Non-empty text-only replacement content.\"}},\"required\":[\"kind\",\"content\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"remove\"}},\"required\":[\"kind\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"steer\"}},\"required\":[\"kind\"],\"additionalProperties\":true}]}},\"required\":[\"sessionId\",\"itemId\",\"action\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/updateQueue",
+      "desc": "Mutate one still-pending queue occurrence, resuming a cold Agent first.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"},\"itemId\":{\"type\":\"string\"},\"action\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"edit\"},\"content\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}},\"required\":[\"type\",\"text\"],\"additionalProperties\":true},\"description\":\"Non-empty text-only replacement content.\"}},\"required\":[\"kind\",\"content\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"remove\"}},\"required\":[\"kind\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"steer\"}},\"required\":[\"kind\"],\"additionalProperties\":true}]}},\"required\":[\"sessionId\",\"itemId\",\"action\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/wait",
+      "desc": "Wait for Session quiescence or pending input with bounded assistant output.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"timeoutMs\":{\"type\":\"number\"},\"afterSeq\":{\"type\":\"number\",\"description\":\"Exclusive output cursor; omission includes all available assistant records.\"},\"maxMessages\":{\"type\":\"number\",\"description\":\"Positive assistant-record limit; omission uses the history message budget.\"},\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "session/workspacePathApplications",
+      "desc": "Query current file handlers on the serving desktop without activating an Agent.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "skills/list",
+      "desc": "List the user-invocable skills visible to one Session composition.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    }
+  ],
+  "dsh-api-settings-controller": [
+    {
+      "ep": "credentials/describe",
+      "desc": "Describe several references for one configuration surface. Batched because a settings page describes every reference its rows name at once, and one round trip keeps those rows from settling separately.",
+      "params": [
+        {
+          "name": "refs",
+          "schema": "{\"type\":\"array\",\"items\":{\"type\":\"string\"}}"
+        },
+        {
+          "name": "ref",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "value",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "credentials/set",
+      "desc": "Store one value from a configuration surface. The value crosses the wire in this direction only: no read path returns it.",
+      "params": [
+        {
+          "name": "ref",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "value",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "ref",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "credentials/unset",
+      "desc": "Remove one reference from a configuration surface.",
+      "params": [
+        {
+          "name": "ref",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "settings/describe",
+      "desc": "Describe every registered namespace for a configuration page: redacted layered values plus the serialized schema the page renders its form from.",
+      "params": [
+        {
+          "name": "ns",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "settings/mutate",
+      "desc": "Apply path-addressed edits to one namespace\\",
+      "params": [
+        {
+          "name": "ns",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "ops",
+          "schema": "{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\",\"const\":\"set\"},\"path\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"value\":{}},\"required\":[\"op\",\"path\",\"value\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\",\"const\":\"unset\"},\"path\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"op\",\"path\"],\"additionalProperties\":true}]}}"
+        },
+        {
+          "name": "expectedRevision",
+          "schema": "{\"type\":\"number\"}"
+        }
+      ]
+    },
+    {
+      "ep": "settings/openSettingsDocument",
+      "desc": "Materialize the provider-owned settings document and open it in a native text editor.",
+      "params": [
+        {
+          "name": "ns",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "section",
+          "schema": "{\"type\":\"object\",\"properties\":{},\"required\":[],\"additionalProperties\":true}"
+        },
+        {
+          "name": "expectedRevision",
+          "schema": "{\"type\":\"number\"}"
+        }
+      ]
+    },
+    {
+      "ep": "settings/replace",
+      "desc": "Replace one namespace\\",
+      "params": [
+        {
+          "name": "ns",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "section",
+          "schema": "{\"type\":\"object\",\"properties\":{},\"required\":[],\"additionalProperties\":true}"
+        },
+        {
+          "name": "expectedRevision",
+          "schema": "{\"type\":\"number\"}"
+        }
+      ]
+    },
+    {
+      "ep": "settings/update",
+      "desc": "Merge a patch into one namespace\\",
+      "params": [
+        {
+          "name": "ns",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "patch",
+          "schema": "{\"type\":\"object\",\"properties\":{},\"required\":[],\"additionalProperties\":true}"
+        },
+        {
+          "name": "expectedRevision",
+          "schema": "{\"type\":\"number\"}"
+        }
+      ]
+    }
+  ],
+  "dsh-api-terminal-controller": [
+    {
+      "ep": "terminal/attach",
+      "desc": "Attach terminal input and output to one physical Remote stream.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "id",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "terminal/close",
+      "desc": "Close an identity to future creation and kill its process range; repeated closes succeed.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "id",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "terminal/create",
+      "desc": "Allocate a user shell once for a caller-generated identity, without Agent sandbox or approval restrictions.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"shellPath\":{\"type\":\"string\",\"description\":\"A path returned by shell discovery; absent selects the execution default.\"},\"id\":{\"type\":\"string\"},\"cols\":{\"type\":\"number\"},\"rows\":{\"type\":\"number\"}},\"required\":[\"id\",\"cols\",\"rows\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "terminal/environment",
+      "desc": "Read the Session\\",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "sessionId",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "terminal/list",
+      "desc": "List retained terminals without resolving or activating an Agent.",
+      "params": [
+        {
+          "name": "sessionId",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "id",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "terminal/rename",
+      "desc": "Rename a terminal without changing its shell.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "id",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "title",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "terminal/retain",
+      "desc": "Retain an existing terminal for a window without activating its Agent or taking input control.",
+      "params": [
+        {
+          "name": "sessionId",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "id",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "terminal/shells",
+      "desc": "Discover installed shells in the Session\\",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    }
+  ],
+  "dsh-api-workspace-controller": [
+    {
+      "ep": "workspace/archiveSession",
+      "desc": "Hide one known Session from Workspace grouping surfaces.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"},\"stopActivity\":{\"type\":\"boolean\",\"description\":\"Stop the Session's running work — its turn, subagent descendants, owned background jobs, and active schedules — instead of refusing the archive as `workspace/session-active`. The stops are requested before the archive write and are not awaited; the response arrives once the archive set is durable.\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "workspace/create",
+      "desc": "Create or idempotently resolve one Workspace over an existing directory.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\"}},\"required\":[\"workspaceId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "workspace/delete",
+      "desc": "Remove one Workspace registration while retaining files and Sessions.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\"}},\"required\":[\"workspaceId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "workspace/follow",
+      "desc": "Stream a complete Workspace baseline followed by ordered increments. A non-owner receives only the Workspaces and Sessions `allows()` admits. When a delivered Workspace is no longer admitted at its next change or the next order change, the stream sends a `replace` frame with the complete filtered state instead of a `remove`, because a Client never resurrects a removed Workspace; a `remove` frame reports a deletion and reaches only a Client that received that Workspace.",
+      "params": []
+    },
+    {
+      "ep": "workspace/initializeDefault",
+      "desc": "Initialize or reuse the default Workspace during first-use startup. The directory name is fixed, so the Host never renames or relocates an existing default; its initial title is that same name, which browser consumers label in the reader\\",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\"},\"beforeWorkspaceId\":{\"type\":\"string\"}},\"required\":[\"workspaceId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\"},\"sessionId\":{\"type\":\"string\"},\"beforeSessionId\":{\"type\":\"string\"}},\"required\":[\"workspaceId\",\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "workspace/insertBefore",
+      "desc": "Move one Workspace within the registry display order.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\"},\"beforeWorkspaceId\":{\"type\":\"string\"}},\"required\":[\"workspaceId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\"},\"sessionId\":{\"type\":\"string\"},\"beforeSessionId\":{\"type\":\"string\"}},\"required\":[\"workspaceId\",\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "workspace/insertSessionBefore",
+      "desc": "Move one accounted Session within a Workspace.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\"},\"sessionId\":{\"type\":\"string\"},\"beforeSessionId\":{\"type\":\"string\"}},\"required\":[\"workspaceId\",\"sessionId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "workspace/pinSession",
+      "desc": "Surface one known unarchived Session ahead of unpinned Sessions.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"workspaceId\",\"title\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "workspace/rename",
+      "desc": "Rename one Workspace to a unique non-blank title.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"workspaceId\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"required\":[\"workspaceId\",\"title\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "workspace/unarchiveSession",
+      "desc": "Restore one archived Session to Workspace grouping surfaces.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "workspace/unpinSession",
+      "desc": "Remove one Session\\",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\"}},\"required\":[\"sessionId\"],\"additionalProperties\":true}"
+        }
+      ]
+    }
+  ],
+  "dsh-commands": [
+    {
+      "ep": "commands/execute",
+      "desc": "Parse and execute a known command without sending it to the model. A resolved command\\",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "line",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "submittedAttachments",
+          "schema": "{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"image\"},\"mediaType\":{\"type\":\"string\",\"enum\":[\"image/png\",\"image/jpeg\",\"image/webp\",\"image/gif\"],\"description\":\"Declared media type, verified against the decoded bytes during admission.\"},\"data\":{\"type\":\"string\",\"description\":\"Canonical base64 encoding of the image bytes.\"},\"name\":{\"type\":\"string\",\"description\":\"Optional display name; it is never interpreted as a path.\"}},\"required\":[\"type\",\"mediaType\",\"data\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"file\"},\"receiptId\":{\"type\":\"string\"}},\"required\":[\"type\",\"receiptId\"],\"additionalProperties\":true}]}}"
+        }
+      ]
+    },
+    {
+      "ep": "commands/list",
+      "desc": "List the effective immutable command descriptors for one agent.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    }
+  ],
+  "dsh-experimental-api-speech-to-text": [
+    {
+      "ep": "speech/cancelPreparation",
+      "desc": "Explicitly cancel resource preparation.",
+      "params": [
+        {
+          "name": "providerId",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "speech/catalog",
+      "desc": "Read provider choices without preparing a recognizer.",
+      "params": []
+    },
+    {
+      "ep": "speech/configure",
+      "desc": "Persist the user\\",
+      "params": [
+        {
+          "name": "patch",
+          "schema": "{\"type\":\"object\",\"properties\":{\"providerId\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"}},\"required\":[],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "speech/follow",
+      "desc": "Follow provider readiness independently of Session and preparation lifetimes.",
+      "params": []
+    },
+    {
+      "ep": "speech/prepare",
+      "desc": "Start or join one Host-owned preparation task.",
+      "params": [
+        {
+          "name": "providerId",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "options",
+          "schema": "{\"type\":\"object\",\"properties\":{\"downloadSource\":{\"type\":\"string\",\"description\":\"One advertised origin; providers reject unavailable sources and use a manual choice without fallback.\"}},\"required\":[],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"audioBase64\":{\"type\":\"string\"},\"providerId\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"}},\"required\":[\"audioBase64\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "speech/transcribe",
+      "desc": "Validate and transcribe one recording through the explicit provider selection.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"audioBase64\":{\"type\":\"string\"},\"providerId\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"}},\"required\":[\"audioBase64\"],\"additionalProperties\":true}"
+        }
+      ]
+    }
+  ],
+  "dsh-goal": [
+    {
+      "ep": "goals/clear",
+      "desc": "Clear the current goal while retaining a durable tombstone and history.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "ref",
+          "schema": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Stable goal identity.\"},\"revision\":{\"type\":\"number\",\"description\":\"Positive revision; every durable mutation increments it.\"}},\"required\":[\"id\",\"revision\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "goals/complete",
+      "desc": "Mark a current non-complete goal complete and disarm it.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "ref",
+          "schema": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Stable goal identity.\"},\"revision\":{\"type\":\"number\",\"description\":\"Positive revision; every durable mutation increments it.\"}},\"required\":[\"id\",\"revision\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "goals/create",
+      "desc": "Create one Goal through the remote boundary.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"objective\":{\"type\":\"string\"},\"maxGoalRounds\":{\"type\":\"number\"}},\"required\":[\"objective\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        }
+      ]
+    },
+    {
+      "ep": "goals/edit",
+      "desc": "Edit objective and/or round cap without changing phase.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "ref",
+          "schema": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Stable goal identity.\"},\"revision\":{\"type\":\"number\",\"description\":\"Positive revision; every durable mutation increments it.\"}},\"required\":[\"id\",\"revision\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"objective\":{\"type\":\"string\"},\"maxGoalRounds\":{\"type\":\"number\"}},\"required\":[],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "goals/get",
+      "desc": "Read the current goal for one exact live agent.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "ref",
+          "schema": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Stable goal identity.\"},\"revision\":{\"type\":\"number\",\"description\":\"Positive revision; every durable mutation increments it.\"}},\"required\":[\"id\",\"revision\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "goals/pause",
+      "desc": "Pause an active goal and disarm automatic continuation.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "ref",
+          "schema": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Stable goal identity.\"},\"revision\":{\"type\":\"number\",\"description\":\"Positive revision; every durable mutation increments it.\"}},\"required\":[\"id\",\"revision\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "goals/resume",
+      "desc": "Resume and arm a stopped goal, or rearm an active goal after a session-start edge, while its round budget still has capacity.",
+      "params": [
+        {
+          "name": "agent",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "ref",
+          "schema": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Stable goal identity.\"},\"revision\":{\"type\":\"number\",\"description\":\"Positive revision; every durable mutation increments it.\"}},\"required\":[\"id\",\"revision\"],\"additionalProperties\":true}"
+        }
+      ]
+    }
+  ],
+  "dsh-llm": [
+    {
+      "ep": "llm/discoverModels",
+      "desc": "Remote adapter for one draft provider interrogation.",
+      "params": [
+        {
+          "name": "settingsNs",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"provider\":{\"type\":\"string\",\"description\":\"Route the draft is editing, when it edits an existing one. A route whose adapter already knows its models answers from that knowledge instead of asking the endpoint — the adapter's own registry is the better answer, and it costs no network call.\"},\"baseURL\":{\"type\":\"string\",\"description\":\"Endpoint to interrogate. Optional because a route the adapter already describes needs none; a route it does not must supply one.\"},\"api\":{\"type\":\"string\",\"description\":\"Wire protocol the endpoint speaks, when the draft names one.\"},\"apiKey\":{\"type\":\"string\",\"description\":\"Credential for this interrogation alone; the harness never stores it.\"}},\"required\":[],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "llm/listConfigurableProviders",
+      "desc": "List every declared configurable provider, registered or dormant.",
+      "params": []
+    },
+    {
+      "ep": "llm/listProviders",
+      "desc": "Describe provider routes with a registered adapter.",
+      "params": []
+    }
+  ],
+  "dsh-schedule": [
+    {
+      "ep": "schedule/catalog",
+      "desc": "Read every Host task without a page bound or Session activation.",
+      "params": []
+    },
+    {
+      "ep": "schedule/create",
+      "desc": "Create one task with a Host-generated identity for a human Remote caller.",
+      "params": []
+    },
+    {
+      "ep": "schedule/deleteInactive",
+      "desc": "Delete every ended Host task, leaving active tasks armed. Ended tasks never schedule another delivery, so the removal changes no pending target and no timer is recomputed. Rows are enumerated and removed in one FIFO slot, so a delivery ordered behind this call ends its task after the enumeration rather than during it. The batch is one domain write: a normal failure rejects with every listed row still stored, while a backend `unknown-state` failure may have removed rows and quarantines the Host domain, so later schedule operations reject until the domain is reopened. A successful nonempty batch emits `schedule/changed` without Agent notices. A rejected batch announces `schedule/changed` because it does not establish which rows landed, and clients then re-read the catalog.",
+      "params": []
+    },
+    {
+      "ep": "schedule/deliveryLimits",
+      "desc": "Read effective delivery limits without loading or activating a task.",
+      "params": []
+    },
+    {
+      "ep": "schedule/edit",
+      "desc": "Update or delete one task for a human Remote caller; an invalid patch rejects with `schedule/input-invalid`.",
+      "params": []
+    },
+    {
+      "ep": "schedule/history",
+      "desc": "Remote form of the target-based {@link ScheduleService.history}; an invalid limit rejects with `schedule/input-invalid`.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Task whose saved deliveries are read.\"},\"limit\":{\"type\":\"number\",\"description\":\"Required safe-integer page size from 1 through 100.\"},\"before\":{\"type\":\"string\",\"description\":\"Message identity of the oldest entry in the previous page; excluded from this page.\"}},\"required\":[\"id\",\"limit\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"active\":{\"type\":\"boolean\",\"description\":\"`true` lists only active tasks; `false` lists only paused and ended tasks; omission lists all tasks.\"},\"limit\":{\"type\":\"number\",\"description\":\"Page size from 1 through 500; the default is 100.\"},\"offset\":{\"type\":\"number\",\"description\":\"Number of sorted tasks to skip; the default is 0.\"}},\"required\":[],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "schedule/list",
+      "desc": "Remote form of the shared Host-wide list.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"active\":{\"type\":\"boolean\",\"description\":\"`true` lists only active tasks; `false` lists only paused and ended tasks; omission lists all tasks.\"},\"limit\":{\"type\":\"number\",\"description\":\"Page size from 1 through 500; the default is 100.\"},\"offset\":{\"type\":\"number\",\"description\":\"Number of sorted tasks to skip; the default is 0.\"}},\"required\":[],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "schedule/run",
+      "desc": "Deliver one task now without consuming or moving its scheduled occurrence; an archived destination Session rejects with `schedule/target-archived`.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Task to run now.\"}},\"required\":[\"id\"],\"additionalProperties\":true}"
+        },
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Task to read.\"}},\"required\":[\"id\"],\"additionalProperties\":true}"
+        }
+      ]
+    },
+    {
+      "ep": "schedule/view",
+      "desc": "Read one task without activating its target Sessions.",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Task to read.\"}},\"required\":[\"id\"],\"additionalProperties\":true}"
+        }
+      ]
+    }
+  ],
+  "dsh-subagent": [
+    {
+      "ep": "subagents/interruptByParent",
+      "desc": "Remote face of {@link interrupt} under one durable parent address. No catalog, history, persistence, or parent Agent lookup runs: the core primitive alone authorizes the address against the live Activation, which is what keeps a live child interruptible while its parent Agent is offline. Absent, idle, and already-completed targets are accepted no-ops there.",
+      "params": [
+        {
+          "name": "childSessionId",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "parentSessionId",
+          "schema": "{\"type\":\"string\"}"
+        },
+        {
+          "name": "mode",
+          "schema": "{\"type\":\"string\",\"const\":\"continuable\"}"
+        }
+      ]
+    },
+    {
+      "ep": "subagents/prompt",
+      "desc": "Deliver one browser-authored message to a continuable child through the exact live direct parent, retaining the caller-minted request identity and validated browser zone on the accepted message. Success identifies the message the child\\",
+      "params": [
+        {
+          "name": "request",
+          "schema": "{\"type\":\"object\",\"properties\":{\"requestId\":{\"type\":\"string\",\"description\":\"Identity persisted on the accepted message, minted before the call.\"},\"parentSessionId\":{\"type\":\"string\"},\"childSessionId\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\",\"const\":\"continuable\",\"description\":\"Required discriminator retained from the browser control address.\"},\"delivery\":{\"type\":\"string\",\"enum\":[\"queue\",\"steer\"],\"description\":\"Whether this message queues a later turn or targets the nearest step.\"},\"content\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}},\"required\":[\"type\",\"text\"],\"additionalProperties\":true},{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"image\"},\"mediaType\":{\"type\":\"string\",\"enum\":[\"image/png\",\"image/jpeg\",\"image/webp\",\"image/gif\"]},\"data\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"}},\"required\":[\"type\",\"mediaType\",\"data\"],\"additionalProperties\":true}]},\"description\":\"Browser prompt parts delivered as the child's user message. The Host admits and persists image parts before delivery, so the wire never carries a durable attachment reference the caller could fabricate.\"},\"clientTimeZone\":{\"type\":\"string\",\"description\":\"Optional browser zone sampled for this exact human prompt.\"}},\"required\":[\"requestId\",\"parentSessionId\",\"childSessionId\",\"mode\",\"delivery\",\"content\"],\"additionalProperties\":true}"
+        }
+      ]
+    }
+  ]
+}
