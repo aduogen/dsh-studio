@@ -516,3 +516,17 @@ html[data-scheme="light"] .panel-input { background: #fff; color: var(--fg); }
 }
 .gv-empty { grid-column: 1 / -1; color: var(--fg-faint); padding: 20px; text-align: center; }
 html[data-scheme="light"] .gv-search { background: #fff; color: var(--fg); }
+
+/* ---- frame resize grips ---- */
+.frame-grip { position: absolute; z-index: 3; pointer-events: auto; }
+.frame-grip-nw { left: -4px; top: -4px; width: 14px; height: 14px; cursor: nwse-resize; }
+.frame-grip-n  { left: 14px; right: 14px; top: -4px; height: 8px; cursor: ns-resize; }
+.frame-grip-ne { right: -4px; top: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
+.frame-grip-e  { right: -4px; top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
+.frame-grip-se { right: -4px; bottom: -4px; width: 14px; height: 14px; cursor: nwse-resize; }
+.frame-grip-s  { left: 14px; right: 14px; bottom: -4px; height: 8px; cursor: ns-resize; }
+.frame-grip-sw { left: -4px; bottom: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
+.frame-grip-w  { left: -4px; top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
+
+/* the stack cell sits inside the frame's last free slot */
+.stack-cell { position: absolute; }

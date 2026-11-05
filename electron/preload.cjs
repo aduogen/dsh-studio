@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('studio', {
   chatSend: (opts) => ipcRenderer.invoke('chat:send', opts),
   loadDigests: () => ipcRenderer.invoke('digests:load'),
   saveDigests: (m) => ipcRenderer.invoke('digests:save', m),
+  loadFrames: () => ipcRenderer.invoke('frames:load'),
+  saveFrames: (m) => ipcRenderer.invoke('frames:save', m),
   loadColors: () => ipcRenderer.invoke('colors:load'),
   saveColors: (m) => ipcRenderer.invoke('colors:save', m),
   loadEdges: () => ipcRenderer.invoke('edges:load'),

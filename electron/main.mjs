@@ -33,6 +33,10 @@ function createWindow() {
     },
   });
   diag('window constructed');
+  // Surface renderer errors in boot.log: a thrown module leaves a blank board.
+  win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    if (level >= 2) diag('renderer[' + level + '] ' + String(message).slice(0, 500) + ' @' + sourceId + ':' + line);
+  });
   win.loadFile(path.join(__dirname, '..', 'src', 'index.html'));
   diag('loadFile called');
   win.webContents.on('did-finish-load', () => diag('did-finish-load'));
@@ -163,6 +167,16 @@ ipcMain.handle('digests:load', async () => {
 
 ipcMain.handle('digests:save', async (_e, map) => {
   try { writeAtomic(digestsFile(), JSON.stringify(map ?? {})); return true; } catch { return false; }
+});
+
+const framesFile = () => path.join(app.getPath('userData'), 'canvas-frames.json');
+
+ipcMain.handle('frames:load', async () => {
+  try { return JSON.parse(fs.readFileSync(framesFile(), 'utf8')); } catch { return {}; }
+});
+
+ipcMain.handle('frames:save', async (_e, map) => {
+  try { writeAtomic(framesFile(), JSON.stringify(map ?? {})); return true; } catch { return false; }
 });
 
 ipcMain.handle('colors:load', async () => {

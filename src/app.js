@@ -41,95 +41,52 @@ const state = {
   wsColors: new Map(),     // workspaceId -> colour
   stacked: new Map(),      // workspaceId -> true when folded into a stack cell
   groupView: null,         // workspaceId shown in the folder-style panel
+  resizing: null,          // {workspaceId, dir, start, ox, oy, z} while dragging a grip
 };
 
 const snap = (v) => Math.round(v / GRID) * GRID;
-const STACK_LIMIT = 8;   // cards shown before a workspace folds the rest away
-
-// Members visible on the board; the remainder collapses into one stack cell.
+// Which members of a workspace are on the board, and which fold into the stack,
+// is decided by the frame's capacity — exactly like the original plugin.
 function workspaceLayout(w) {
   const memberSet = new Set(w.sessionIds);
-  const members = state.sessions.filter((s) => memberSet.has(s.sessionId));
-  const visible = members.slice(0, STACK_LIMIT);
-  const folded = members.slice(STACK_LIMIT);
-  return { members, visible, folded };
-}
-
-initFontScale();
-// Follow the OS colour scheme.
-const mq = window.matchMedia('(prefers-color-scheme: light)');
-const applyScheme = () => {
-  document.documentElement.dataset.scheme = mq.matches ? 'light' : 'dark';
-};
-applyScheme();
-mq.addEventListener('change', applyScheme);
-subscribeLocale(() => { applyStaticText(); render(); });
-subscribeFont(() => { applyStaticText(); render(); });
-
-// Every static label in the chrome is owned here, so a locale switch repaints them.
-function applyStaticText() {
-  const brand = document.getElementById('brand');
-  if (brand) brand.textContent = t('app.brand');
-  const search = document.getElementById('search');
-  if (search) search.placeholder = t('search.placeholder');
-  const bb = document.getElementById('btn-batch');
-  if (bb) bb.textContent = t('btn.batch');
-  const bf = document.getElementById('btn-fit');
-  if (bf) bf.textContent = t('btn.fit');
-  const br = document.getElementById('btn-reload');
-  if (br) br.textContent = t('btn.reload');
-  const lang = document.getElementById('btn-lang');
-  if (lang) {
-    const pref = getLocalePref();
-    lang.textContent = pref === 'auto' ? t('lang.auto') : (pref === 'zh' ? '中文' : 'English');
-    lang.title = t('lang.hint', {
-      cur: pref === 'auto' ? t('lang.auto') : pref,
-      nxt: pref === 'auto' ? '中文' : (pref === 'zh' ? 'English' : t('lang.auto')),
-    });
-  }
-  const fi = document.getElementById('btn-font-plus');
-  if (fi) { fi.disabled = !canIncrease(); fi.title = t('font.increase'); }
-  const fd = document.getElementById('btn-font-minus');
-  if (fd) { fd.disabled = !canDecrease(); fd.title = t('font.decrease'); }
-  const fr = document.getElementById('btn-font-reset');
-  if (fr) { fr.textContent = t('font.reset'); fr.title = t('font.reset'); }
-}
-
-function setStatus(t) { statusEl.textContent = t; }
-
-function relTime(ts) {
-  if (!ts) return '';
-  const m = Math.round((Date.now() - ts) / 60000);
-  if (m < 1) return '刚刚';
-  if (m < 60) return m + ' 分钟前';
-  const h = Math.round(m / 60);
-  if (h < 24) return h + ' 小时前';
-  return Math.round(h / 24) + ' 天前';
+  const members = state.sessions.filter((x) => memberSet.has(x.sessionId));
+  const rect = state.wsRect.get(w.workspaceId);
+  if (!rect) return { members, shown: members, folded: [] };
+  const capacity = capacityFor(rect);
+  const slots = visibleCount(capacity, members.length);
+  return { members, shown: members.slice(0, slots), folded: members.slice(slots) };
 }
 
 function ensureLayout() {
   const memberOf = new Map();
   for (const w of state.workspaces) for (const id of w.sessionIds) memberOf.set(id, w.workspaceId);
 
-  // Members are laid out inside their own workspace block, so frames stay tight.
-  // A workspace larger than STACK_LIMIT keeps its first members and folds the rest.
+  // Each workspace gets a frame sized to its members; cards then snap onto the
+  // frame's own slot grid. Resizing a frame recomputes what fits and folds the rest.
   let cursorY = 48;
   for (const w of state.workspaces) {
-    const { members, visible } = workspaceLayout(w);
+    const { members } = workspaceLayout(w);
     if (members.length === 0) continue;
-    let i = 0;
-    for (const s of visible) {
-      if (!state.positions.has(s.sessionId)) {
-        const col = i % COLS, row = Math.floor(i / COLS);
-        state.positions.set(s.sessionId, {
-          x: snap(80 + col * (CARD_W + CARD_GAP_X)),
-          y: snap(cursorY + 26 + row * (132 + CARD_GAP_Y)),
-        });
-      }
-      i++;
+    let rect = state.wsRect.get(w.workspaceId);
+    if (!rect) {
+      const cols = Math.min(COLS, Math.max(1, members.length));
+      const rows = Math.ceil(members.length / cols);
+      rect = {
+        x: 80,
+        y: snap(cursorY),
+        w: Math.max(MIN_FRAME_W, cols * (CARD_W + CARD_GAP_X) - CARD_GAP_X + FRAME_PAD * 2),
+        h: Math.max(MIN_FRAME_H, rows * (CARD_H + CARD_GAP_Y) - CARD_GAP_Y + FRAME_PAD * 2 + FRAME_LABEL_H),
+      };
+      state.wsRect.set(w.workspaceId, rect);
     }
-    const rows = Math.ceil(visible.length / COLS);
-    cursorY = snap(cursorY + 26 + rows * (132 + CARD_GAP_Y) + 30);
+    // Place every member that fits onto its slot inside the frame.
+    const shown = workspaceLayout(w).shown;
+    const cols = colsForWidth(rect.w);
+    shown.forEach((item, idx) => {
+      const p = slotPoint(rect, idx, cols);
+      state.positions.set(item.sessionId, { x: snap(p.x), y: snap(p.y) });
+    });
+    cursorY = snap(rect.y + rect.h + 40);
   }
 
   // Sessions that belong to no workspace sit below, in their own grid.
@@ -146,27 +103,77 @@ function ensureLayout() {
   }
 }
 
+function setStatus(text) {
+  const el = document.getElementById("status");
+  if (el) el.textContent = text;
+}
+
+function relTime(ts) {
+  if (!ts) return "";
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 1) return "刚刚";
+  if (m < 60) return m + " 分钟前";
+  const h = Math.round(m / 60);
+  if (h < 24) return h + " 小时前";
+  return Math.round(h / 24) + " 天前";
+}
+// Geometry mirrors the original plugin: a frame is a grid of card slots, and how
+// many cards fit decides how many are folded into the stack cell.
 const FRAME_PAD = 26;
 const FRAME_LABEL_H = 26;
+const CARD_H = 132;
+const TOP_INSET = FRAME_PAD + FRAME_LABEL_H;
+const MIN_FRAME_W = CARD_W + FRAME_PAD * 2;
+const MIN_FRAME_H = TOP_INSET + CARD_H + FRAME_PAD;
 
+function colsForWidth(width) {
+  const usable = Math.max(CARD_W, width - FRAME_PAD * 2);
+  return Math.max(1, Math.floor((usable + CARD_GAP_X) / (CARD_W + CARD_GAP_X)));
+}
+
+function rowsForHeight(height) {
+  const usable = Math.max(CARD_H, height - TOP_INSET - FRAME_PAD);
+  return Math.max(1, Math.floor((usable + CARD_GAP_Y) / (CARD_H + CARD_GAP_Y)));
+}
+
+function capacityFor(rect) {
+  return colsForWidth(rect.w) * rowsForHeight(rect.h);
+}
+
+// When cards overflow, one slot is surrendered to the stack cell itself.
+function visibleCount(capacity, total) {
+  if (total <= capacity) return total;
+  return Math.max(0, capacity - 1);
+}
+
+function slotPoint(rect, index, cols) {
+  const col = index % cols;
+  const row = Math.floor(index / cols);
+  return {
+    x: rect.x + FRAME_PAD + col * (CARD_W + CARD_GAP_X),
+    y: rect.y + TOP_INSET + row * (CARD_H + CARD_GAP_Y),
+  };
+}
+
+// Frames default to fitting their members, then the user may resize them.
 function ensureFrames() {
   for (const w of state.workspaces) {
     if (state.wsRect.has(w.workspaceId)) continue;
     const memberSet = new Set(w.sessionIds);
     const members = state.sessions
-      .filter((s) => memberSet.has(s.sessionId))
-      .map((s) => state.positions.get(s.sessionId))
+      .filter((x) => memberSet.has(x.sessionId))
+      .map((x) => state.positions.get(x.sessionId))
       .filter(Boolean);
     if (members.length === 0) continue;
     const minX = Math.min(...members.map((p) => p.x));
     const minY = Math.min(...members.map((p) => p.y));
     const maxX = Math.max(...members.map((p) => p.x)) + CARD_W;
-    const maxY = Math.max(...members.map((p) => p.y)) + 132;
+    const maxY = Math.max(...members.map((p) => p.y)) + CARD_H;
     state.wsRect.set(w.workspaceId, {
       x: snap(minX - FRAME_PAD),
-      y: snap(minY - FRAME_PAD - FRAME_LABEL_H),
-      w: snap(maxX - minX + FRAME_PAD * 2),
-      h: snap(maxY - minY + FRAME_PAD * 2 + FRAME_LABEL_H),
+      y: snap(minY - TOP_INSET),
+      w: Math.max(MIN_FRAME_W, snap(maxX - minX + FRAME_PAD * 2)),
+      h: Math.max(MIN_FRAME_H, snap(maxY - minY + FRAME_PAD * 2 + FRAME_LABEL_H)),
     });
   }
 }
@@ -183,10 +190,13 @@ function renderStackCells() {
     const r = state.wsRect.get(w.workspaceId);
     if (!r) continue;
 
+    // The stack cell occupies the slot the overflow reserved, inside the frame.
+    const cols = colsForWidth(r.w);
+    const slot = slotPoint(r, visibleCount(capacityFor(r), w.sessionIds.length), cols);
     const cell = document.createElement('div');
     cell.className = 'stack-cell';
-    cell.style.left = (r.x * c.zoom + c.x) + 'px';
-    cell.style.top = ((r.y + r.h + 8) * c.zoom + c.y) + 'px';
+    cell.style.left = (slot.x * c.zoom + c.x) + 'px';
+    cell.style.top = (slot.y * c.zoom + c.y) + 'px';
     cell.style.transform = 'scale(' + c.zoom + ')';
     cell.style.transformOrigin = '0 0';
 
@@ -404,8 +414,74 @@ function renderFrames() {
       openFrameMenu(e.clientX, e.clientY, w);
     });
     el.appendChild(label);
+
+    // Eight resize grips: dragging one resizes the frame, which changes how many
+    // cards fit and therefore how many fold into the stack cell.
+    for (const dir of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']) {
+      const grip = document.createElement('span');
+      grip.className = 'frame-grip frame-grip-' + dir;
+      grip.dataset.dir = dir;
+      grip.addEventListener('mousedown', (e) => startFrameResize(e, w, dir));
+      el.appendChild(grip);
+    }
     canvasEl.appendChild(el);
   }
+}
+
+// Resize a frame from any edge or corner; cards reflow and fold as it shrinks.
+function startFrameResize(e, w, dir) {
+  e.stopPropagation();
+  e.preventDefault();
+  const rect = state.wsRect.get(w.workspaceId);
+  if (!rect) return;
+  state.resizing = { workspaceId: w.workspaceId, dir, start: { ...rect }, ox: e.clientX, oy: e.clientY, z: state.camera.zoom };
+  document.addEventListener('mousemove', onFrameResize);
+  document.addEventListener('mouseup', endFrameResize, { once: true });
+}
+
+function onFrameResize(e) {
+  const r = state.resizing;
+  if (!r) return;
+  const dx = (e.clientX - r.ox) / r.z;
+  const dy = (e.clientY - r.oy) / r.z;
+  const s0 = r.start;
+  let { x, y, w: fw, h: fh } = s0;
+  if (r.dir.includes('e')) fw = s0.w + dx;
+  if (r.dir.includes('s')) fh = s0.h + dy;
+  if (r.dir.includes('w')) { fw = s0.w - dx; x = s0.x + dx; }
+  if (r.dir.includes('n')) { fh = s0.h - dy; y = s0.y + dy; }
+  // Keep the frame above the minimum that still holds one card.
+  if (fw < MIN_FRAME_W) { if (r.dir.includes('w')) x = s0.x + (s0.w - MIN_FRAME_W); fw = MIN_FRAME_W; }
+  if (fh < MIN_FRAME_H) { if (r.dir.includes('n')) y = s0.y + (s0.h - MIN_FRAME_H); fh = MIN_FRAME_H; }
+  state.wsRect.set(r.workspaceId, { x: snap(x), y: snap(y), w: snap(fw), h: snap(fh) });
+  reflowWorkspace(r.workspaceId);
+  applyCamera();
+}
+
+function endFrameResize() {
+  const r = state.resizing;
+  state.resizing = null;
+  document.removeEventListener('mousemove', onFrameResize);
+  if (!r) return;
+  reflowWorkspace(r.workspaceId);
+  applyCamera();
+  window.studio.saveFrames(Object.fromEntries(state.wsRect));
+}
+
+// Re-place the cards of one workspace according to its current frame capacity.
+function reflowWorkspace(workspaceId) {
+  const w = state.workspaces.find((x) => x.workspaceId === workspaceId);
+  if (!w) return;
+  const rect = state.wsRect.get(workspaceId);
+  if (!rect) return;
+  const { shown } = workspaceLayout(w);
+  const cols = colsForWidth(rect.w);
+  shown.forEach((item, idx) => {
+    const p = slotPoint(rect, idx, cols);
+    state.positions.set(item.sessionId, { x: snap(p.x), y: snap(p.y) });
+  });
+  // Unfolded cards re-appear, so the board must be repainted too.
+  render();
 }
 
 function ensureEdgeLayer() {
@@ -568,10 +644,22 @@ async function deleteCard(s) {
   toast('已删除');
 }
 
+// Session ids hidden inside a workspace's stack cell.
+function foldedSessionIds() {
+  const out = new Set();
+  for (const w of state.workspaces) {
+    const layout = workspaceLayout(w);
+    for (const item of layout.folded) out.add(item.sessionId);
+  }
+  return out;
+}
+
 let render = function () {
   canvasEl.querySelectorAll('.card').forEach((el) => el.remove());
   const q = state.query.trim().toLowerCase();
+  const folded = foldedSessionIds();
   for (const s of state.sessions) {
+    if (folded.has(s.sessionId)) continue;   // folded into its group's stack cell
     const p = state.positions.get(s.sessionId);
     if (!p) continue;
     if (q && !(s.title.toLowerCase().includes(q) || (s.lastPrompt || '').toLowerCase().includes(q))) continue;
@@ -1611,6 +1699,12 @@ async function reload() {
       for (const [id, dg] of Object.entries(savedDigests ?? {})) state.digests.set(id, dg);
     } catch {}
     try {
+      const savedFrames = await window.studio.loadFrames();
+      for (const [id, r] of Object.entries(savedFrames ?? {})) {
+        if (r && typeof r.w === 'number') state.wsRect.set(id, r);
+      }
+    } catch {}
+    try {
       const savedColors = await window.studio.loadColors();
       for (const [id, c] of Object.entries(savedColors ?? {})) state.wsColors.set(id, c);
     } catch {}
@@ -1844,6 +1938,9 @@ window.__studioDebug = {
   render: () => render(),
   reload: () => reload(),
   removeCard: (sessionId) => removeCardLocal(sessionId),
+  reflow: (workspaceId) => reflowWorkspace(workspaceId),
+  workspaces: () => workspaceLayout,
+  rect: (id) => state.wsRect.get(id),
   setRunning(ids) {
     const set = new Set(ids);
     for (const s of state.sessions) s.running = set.has(s.sessionId);
