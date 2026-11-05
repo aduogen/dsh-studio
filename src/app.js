@@ -3,6 +3,7 @@
 
 import { showMenu, closeMenu, toast, confirmDialog, promptDialog } from './menu.js';
 import { EDGE_KINDS, sideHandles, anchor, curvePath, distToSegment, buildInjectedText } from './edges.js';
+import { t, activeLocale, setLocalePref, getLocalePref, subscribeLocale, initFontScale, increaseFont, decreaseFont, resetFont, canIncrease, canDecrease, fontStep, subscribeFont } from './i18n.js';
 
 const canvasEl = document.getElementById('canvas');
 const statusEl = document.getElementById('status');
@@ -35,6 +36,39 @@ const state = {
 };
 
 const snap = (v) => Math.round(v / GRID) * GRID;
+
+initFontScale();
+subscribeLocale(() => { applyStaticText(); render(); });
+subscribeFont(() => { applyStaticText(); render(); });
+
+// Every static label in the chrome is owned here, so a locale switch repaints them.
+function applyStaticText() {
+  const brand = document.getElementById('brand');
+  if (brand) brand.textContent = t('app.brand');
+  const search = document.getElementById('search');
+  if (search) search.placeholder = t('search.placeholder');
+  const bb = document.getElementById('btn-batch');
+  if (bb) bb.textContent = t('btn.batch');
+  const bf = document.getElementById('btn-fit');
+  if (bf) bf.textContent = t('btn.fit');
+  const br = document.getElementById('btn-reload');
+  if (br) br.textContent = t('btn.reload');
+  const lang = document.getElementById('btn-lang');
+  if (lang) {
+    const pref = getLocalePref();
+    lang.textContent = pref === 'auto' ? t('lang.auto') : (pref === 'zh' ? '中文' : 'English');
+    lang.title = t('lang.hint', {
+      cur: pref === 'auto' ? t('lang.auto') : pref,
+      nxt: pref === 'auto' ? '中文' : (pref === 'zh' ? 'English' : t('lang.auto')),
+    });
+  }
+  const fi = document.getElementById('btn-font-plus');
+  if (fi) { fi.disabled = !canIncrease(); fi.title = t('font.increase'); }
+  const fd = document.getElementById('btn-font-minus');
+  if (fd) { fd.disabled = !canDecrease(); fd.title = t('font.decrease'); }
+  const fr = document.getElementById('btn-font-reset');
+  if (fr) { fr.textContent = t('font.reset'); fr.title = t('font.reset'); }
+}
 
 function setStatus(t) { statusEl.textContent = t; }
 
@@ -226,12 +260,12 @@ function cardBadges(s) {
 
 function openCardMenu(x, y, s) {
   showMenu(x, y, [
-    { label: '打开对话', run: () => selectSession(s.sessionId) },
-    { label: s.pinned ? '取消置顶' : '置顶会话', run: () => runAction(s.pinned ? 'unpin' : 'pin', s) },
-    { label: '重命名…', run: () => renameCard(s) },
+    { label: t('menu.open'), run: () => selectSession(s.sessionId) },
+    { label: s.pinned ? t('menu.unpin') : t('menu.pin'), run: () => runAction(s.pinned ? 'unpin' : 'pin', s) },
+    { label: t('menu.rename'), run: () => renameCard(s) },
     { separator: true },
-    { label: s.running ? '停止运行' : '归档会话', run: () => s.running ? runAction('cancel', s) : runAction('archive', s) },
-    { label: '删除会话（回收站）', danger: true, run: () => deleteCard(s) },
+    { label: s.running ? t('menu.stop') : t('menu.archive'), run: () => s.running ? runAction('cancel', s) : runAction('archive', s) },
+    { label: t('menu.delete'), danger: true, run: () => deleteCard(s) },
   ]);
 }
 
@@ -420,7 +454,7 @@ async function openPanel(sessionId) {
 
   const loading = document.createElement('div');
   loading.className = 'panel-meta';
-  loading.textContent = '正在读取对话…';
+  loading.textContent = t('panel.loading');
   body.appendChild(loading);
 
   try {
@@ -446,7 +480,7 @@ async function openPanel(sessionId) {
       if (!detail.outline?.length) {
         const none = document.createElement('div');
         none.className = 'panel-meta';
-        none.textContent = '这个对话还没有内容。';
+        none.textContent = t('panel.empty');
         body.appendChild(none);
       }
     }
@@ -512,8 +546,8 @@ function endFrameDrag() {
 
 function openFrameMenu(x, y, w) {
   showMenu(x, y, [
-    { label: '重命名工作区…', run: () => renameWorkspace(w) },
-    { label: '整理本组卡片', run: () => { relayoutWorkspace(w); toast('已整理'); } },
+    { label: t('menu.renameWs'), run: () => renameWorkspace(w) },
+    { label: t('menu.tidyWs'), run: () => { relayoutWorkspace(w); toast('已整理'); } },
   ]);
 }
 
@@ -625,7 +659,7 @@ async function openSpawnPreview() {
 
   const head = document.createElement('div');
   head.className = 'spawn-head';
-  head.textContent = '连线分叉：开一个带上下文的新对话';
+  head.textContent = t('spawn.head');
   const close = document.createElement('button');
   close.className = 'panel-close';
   close.textContent = '✕';
@@ -635,7 +669,7 @@ async function openSpawnPreview() {
 
   const fromLine = document.createElement('div');
   fromLine.className = 'spawn-from';
-  fromLine.textContent = '来源：' + (from?.title ?? pending.fromCardId);
+  fromLine.textContent = t('spawn.from', { t: from?.title ?? pending.fromCardId });
   box.appendChild(fromLine);
 
   // mode picker
@@ -665,7 +699,7 @@ async function openSpawnPreview() {
 
   const textarea = document.createElement('textarea');
   textarea.className = 'spawn-text';
-  textarea.placeholder = '将要注入的内容，可编辑…';
+  textarea.placeholder = t('draft.injectLabel');
   box.appendChild(textarea);
 
   // prefill from the source digest
@@ -678,18 +712,18 @@ async function openSpawnPreview() {
   foot.className = 'spawn-foot';
   const cancel = document.createElement('button');
   cancel.className = 'dlg-btn';
-  cancel.textContent = '取消';
+  cancel.textContent = t('spawn.cancel');
   cancel.addEventListener('click', closeSpawn);
   const ok = document.createElement('button');
   ok.className = 'dlg-btn dlg-primary';
-  ok.textContent = '开新对话';
+  ok.textContent = t('spawn.ok');
   foot.appendChild(cancel);
   foot.appendChild(ok);
   box.appendChild(foot);
 
   ok.addEventListener('click', async () => {
     ok.disabled = true;
-    ok.textContent = '创建中…';
+    ok.textContent = t('spawn.busy');
     const res = await window.studio.spawn({
       fromSessionId: pending.fromCardId,
       mode,
@@ -698,7 +732,7 @@ async function openSpawnPreview() {
     if (!res?.ok) {
       toast('创建失败: ' + String(res?.error ?? '').slice(0, 60), 'error');
       ok.disabled = false;
-      ok.textContent = '开新对话';
+      ok.textContent = t('spawn.ok');
       return;
     }
     // the new card belongs next to where the line was dropped
@@ -710,7 +744,8 @@ async function openSpawnPreview() {
     window.studio.savePosition(newId, state.positions.get(newId));
     closeSpawn();
     toast('已创建新对话');
-    await reload();
+    await applyStaticText();
+reload();
     selectSession(newId);
   });
 
@@ -840,13 +875,13 @@ function renderHits(res) {
 
   const head = document.createElement('div');
   head.className = 'hits-head';
-  head.textContent = res.loading ? '全文搜索中…' : '全部对话里的命中 · ' + (res.items?.length ?? 0) + ' 条';
+  head.textContent = res.loading ? t('hits.loading') : t('hits.head', { n: res.items?.length ?? 0 });
   box.appendChild(head);
 
   if (res.disabled) {
     const n = document.createElement('div');
     n.className = 'hits-note';
-    n.textContent = '全文索引未启用（本机索引关闭）—— 上方卡片过滤仍可用。';
+    n.textContent = t('hits.disabled');
     box.appendChild(n);
     return;
   }
@@ -885,7 +920,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 async function reload() {
-  setStatus('正在读取会话…');
+  setStatus(t('status.loading'));
   try {
     const board = await window.studio.board();
     state.sessions = board;
@@ -911,7 +946,7 @@ async function reload() {
     ensureLayout();
     ensureFrames();
     render();
-    setStatus(board.length + ' 个会话 · ' + state.workspaces.length + ' 个分组');
+    setStatus(t('status.count', { n: board.length, w: state.workspaces.length }));
 
     // Second pass: real running flags, bounded batches, off the critical path.
     window.studio.running(board.map((s) => s.sessionId)).then((flags) => {
@@ -950,7 +985,7 @@ function renderRail() {
 
   const head = document.createElement('div');
   head.className = 'rail-head';
-  head.textContent = '队列中的任务 · ' + rows.length;
+  head.textContent = t('rail.head', { n: rows.length });
   rail.appendChild(head);
 
   for (const s of rows) {
@@ -992,7 +1027,7 @@ function renderBatchBar() {
   bar.innerHTML = '';
   const count = document.createElement('span');
   count.className = 'batch-count';
-  count.textContent = '已选 ' + state.picked.size + ' 个对话';
+  count.textContent = t('batch.count', { n: state.picked.size });
   bar.appendChild(count);
   const mk = (label, cls, fn, disabled) => {
     const b = document.createElement('button');
@@ -1002,9 +1037,9 @@ function renderBatchBar() {
     b.addEventListener('click', fn);
     return b;
   };
-  bar.appendChild(mk('归档', '', () => runBatch('archive'), state.picked.size === 0));
-  bar.appendChild(mk('删除', 'danger', () => runBatch('delete'), state.picked.size === 0));
-  bar.appendChild(mk('取消', '', () => { state.batchMode = false; state.picked.clear(); render(); }));
+  bar.appendChild(mk(t('batch.archive'), '', () => runBatch('archive'), state.picked.size === 0));
+  bar.appendChild(mk(t('batch.delete'), 'danger', () => runBatch('delete'), state.picked.size === 0));
+  bar.appendChild(mk(t('batch.cancel'), '', () => { state.batchMode = false; state.picked.clear(); render(); }));
 }
 
 async function runBatch(kind) {
@@ -1032,6 +1067,16 @@ async function runBatch(kind) {
 }
 
 // toggle batch mode from the top bar
+document.getElementById('btn-font-minus').addEventListener('click', () => decreaseFont());
+document.getElementById('btn-font-reset').addEventListener('click', () => resetFont());
+document.getElementById('btn-font-plus').addEventListener('click', () => increaseFont());
+
+document.getElementById('btn-lang').addEventListener('click', () => {
+  const cur = getLocalePref();
+  const next = cur === 'auto' ? 'zh' : (cur === 'zh' ? 'en' : 'auto');
+  setLocalePref(next);
+});
+
 document.getElementById('btn-batch').addEventListener('click', () => {
   state.batchMode = !state.batchMode;
   state.picked.clear();

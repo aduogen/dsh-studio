@@ -48,6 +48,8 @@ ipcMain.handle('engine:invoke', async (_event, endpoint, args) => {
 });
 
 ipcMain.handle('board:get', async () => await api.fastBoard());
+ipcMain.handle('digest:generate', async (_e, sessionId, title) => await api.generateDigest(sessionId, title));
+
 ipcMain.handle('search:run', async (_e, query) => await api.search(String(query ?? '')));
 
 ipcMain.handle('spawn:run', async (_e, opts) => {
@@ -181,33 +183,38 @@ if (process.argv.includes('--dump')) {
           const wait = (ms) => new Promise(r => setTimeout(r, ms));
           await wait(3500);
           const out = {};
-          out.total = document.querySelectorAll('.card').length;
-          const firstTitle = document.querySelector('.card-title')?.textContent ?? '';
-          out.firstTitle = firstTitle.slice(0, 20);
+          out.status = document.getElementById('status')?.textContent;
+          out.brand = document.getElementById('brand')?.textContent;
+          out.fontMinusDisabled = document.getElementById('btn-font-minus')?.disabled;
+          out.fontPlusDisabled = document.getElementById('btn-font-plus')?.disabled;
+          out.langBtn = document.getElementById('btn-lang')?.textContent;
 
-          // filter by a real title substring
-          const needle = firstTitle.slice(2, 8);
-          out.needle = needle;
-          const s = document.getElementById('search');
-          s.value = needle;
-          s.dispatchEvent(new Event('input', { bubbles: true }));
+          // 1. font scale changes the computed size
+          const before = getComputedStyle(document.querySelector('.card-title')).fontSize;
+          document.getElementById('btn-font-plus').click();
+          await wait(250);
+          const after = getComputedStyle(document.querySelector('.card-title')).fontSize;
+          out.fontChanged = before !== after;
+          out.fontBefore = before; out.fontAfter = after;
+          out.fontStepVar = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-step').trim();
+          document.getElementById('btn-font-reset').click();
+          await wait(200);
+          out.fontReset = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-step').trim();
+
+          // 2. language pill cycles and repaints the chrome
+          document.getElementById('btn-lang').click();   // auto -> zh
           await wait(300);
-          out.filtered = document.querySelectorAll('.card').length;
-
-          // restore
-          s.value = '';
-          s.dispatchEvent(new Event('input', { bubbles: true }));
+          out.langAfter1 = document.getElementById('btn-lang')?.textContent;
+          out.batchLabelZh = document.getElementById('btn-batch')?.textContent;
+          out.searchPhZh = document.getElementById('search')?.placeholder;
+          document.getElementById('btn-lang').click();   // zh -> en
           await wait(300);
-          out.restored = document.querySelectorAll('.card').length;
-
-          // search a term that should hit content but not titles
-          s.value = 'Kimi';
-          s.dispatchEvent(new Event('input', { bubbles: true }));
-          await wait(9000);
-          out.contentHits = document.querySelectorAll('.hit-row').length;
-          out.contentHead = document.querySelector('.hits-head')?.textContent;
-          s.value = '';
-          s.dispatchEvent(new Event('input', { bubbles: true }));
+          out.langAfter2 = document.getElementById('btn-lang')?.textContent;
+          out.batchLabelEn = document.getElementById('btn-batch')?.textContent;
+          out.searchPhEn = document.getElementById('search')?.placeholder;
+          document.getElementById('btn-lang').click();   // en -> auto
+          await wait(300);
+          out.langAfter3 = document.getElementById('btn-lang')?.textContent;
           return out;
         })()`);
         fs.writeFileSync(path.join(__dirname, '..', 'dom.json'), JSON.stringify(info, null, 2));

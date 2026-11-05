@@ -135,6 +135,95 @@ export class StudioApi {
     };
   }
 
+  // Bind the deployment default model, because session/create leaves it unset.
+  async bindDefaultModel(sessionId) {
+    try {
+      const cat = await this.engine.call('session/modelCatalog', {}, null);
+      const def = cat?.default;
+      if (!def?.provider || !def?.model) return { ok: false, error: '读不到默认模型' };
+      await this.call('session/selectModel', { sessionId, provider: def.provider, model: def.model });
+      return { ok: true, provider: def.provider, model: def.model };
+    } catch (err) {
+      return { ok: false, error: '绑定模型失败: ' + String(err.message ?? err).slice(0, 90) };
+    }
+  }
+
+  // --- digest -------------------------------------------------------------
+  // The host's llm service is not exposed over HTTP, so a digest is produced by
+  // asking a session to summarise another one: same deployment model, no new channel.
+  async generateDigest(sessionId, title) {
+    const pj = await this.call('session/projections', { sessionId });
+    const outline = pj?.values?.turnOutline ?? [];
+    const transcript = outline.map((t, i) =>
+      'Q' + (i + 1) + ': ' + String(t.prompt ?? '').slice(0, 700) +
+      '\nA' + (i + 1) + ': ' + String(t.response ?? '').slice(0, 900)
+    ).join('\n\n').slice(0, 12000);
+    if (transcript.trim() === '') return { ok: false, error: '这个对话还没有内容，无法生成摘要' };
+
+    const ws = await this.workspaceBaseline();
+    const created = await this.createSession(ws.items[0]?.workspaceId);
+    const helperId = created?.sessionId;
+    if (!helperId) return { ok: false, error: '无法创建摘要会话' };
+
+    // A fresh session has no model bound; a prompt would be accepted and never run.
+    const bound = await this.bindDefaultModel(helperId);
+    if (!bound.ok) return { ok: false, error: bound.error };
+
+    const prompt = [
+      '你是对话摘要器。阅读下面的对话记录，只输出严格 JSON：',
+      '{"summary": string, "keyFindings": string[], "nextStep": string}',
+      '规则：',
+      '- 用对话本身的语言（中文对话输出中文）。',
+      '- summary：这段对话在讲什么、进行到哪，不超过 120 字。',
+      '- keyFindings：最多 5 条短句，写已做出的决定、已确认的事实、已产出的东西。',
+      '- nextStep：一句祈使句，说明下一步具体做什么，不超过 40 字；已完结则输出空字符串。',
+      '- 只输出 JSON，不要 markdown 代码块，不要解释。',
+      '',
+      '对话标题：' + (title ?? ''),
+      '',
+      '对话记录（从旧到新）：',
+      transcript,
+    ].join('\n');
+
+    try {
+      await this.sendPrompt(helperId, prompt);
+    } catch (err) {
+      return { ok: false, error: '摘要请求失败: ' + String(err.message ?? err).slice(0, 90) };
+    }
+
+    // Poll the helper session until it answers or the budget runs out.
+    const deadline = Date.now() + 90000;
+    let text = '';
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const hp = await this.call('session/projections', { sessionId: helperId }).catch(() => null);
+      const turns = hp?.values?.turnOutline ?? [];
+      const first = turns[0];
+      if (first?.response && String(first.response).trim() !== '') { text = String(first.response); break; }
+    }
+    if (!text) return { ok: false, error: '摘要生成超时' };
+
+    // Tolerant parse, same rules as the original plugin.
+    let body = text.trim();
+    if (body.startsWith('```')) body = body.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+    const s0 = body.indexOf('{'), s1 = body.lastIndexOf('}');
+    if (s0 === -1 || s1 <= s0) return { ok: false, error: '摘要输出里没有 JSON' };
+    try {
+      const parsed = JSON.parse(body.slice(s0, s1 + 1));
+      return {
+        ok: true,
+        value: {
+          summary: String(parsed.summary ?? '').slice(0, 300),
+          keyFindings: Array.isArray(parsed.keyFindings) ? parsed.keyFindings.slice(0, 5).map((x) => String(x).slice(0, 120)) : [],
+          nextStep: String(parsed.nextStep ?? '').slice(0, 120),
+          helperSessionId: helperId,
+        },
+      };
+    } catch (err) {
+      return { ok: false, error: '摘要 JSON 解析失败', raw: body.slice(0, 200) };
+    }
+  }
+
   async search(query) {
     try {
       const res = await this.call('session/search', { query });

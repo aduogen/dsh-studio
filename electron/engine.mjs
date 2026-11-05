@@ -2,13 +2,40 @@
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const DSH_EXE = 'E:\\工具\\DeepSeek harness\\DeepSeek Harness.exe';
 const DSH_CLI = 'E:\\工具\\DeepSeek harness\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\cli.js';
 // Overlay that turns on ranked full-text session search (the web bundle leaves it off).
 const SEARCH_PATCH = new URL('../patches/enable-search.yml', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+// Reuses the desktop profile's provider declarations (models and env-var names only).
+const PROVIDERS_PATCH = new URL('../patches/providers.yml', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 
+// The engine reads provider keys from the environment, while DSH stores them in
+// its credential file under "refs". Copy those refs into the child environment so
+// the engine can reach the same providers the desktop app uses.
+const CREDENTIALS = path.join(os.homedir(), '.dsh', '.credentials.yaml');
+
+function loadCredentialEnv() {
+  const env = {};
+  let text = "";
+  try { text = fs.readFileSync(CREDENTIALS, "utf8"); } catch { return env; }
+  let inRefs = false;
+  for (const line of text.split(/\r?\n/)) {
+    if (/^refs:\s*$/.test(line)) { inRefs = true; continue; }
+    if (!inRefs) continue;
+    if (/^\S/.test(line)) { inRefs = false; continue; }
+    const m = /^\s+([A-Z][A-Z0-9_]+):\s*(.+)$/.exec(line);
+    if (!m) continue;
+    let value = m[2].trim();
+    if ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"'))) {
+      value = value.slice(1, -1);
+    }
+    if (value !== "") env[m[1]] = value;
+  }
+  return env;
+}
 const URL_RE = /http:\/\/[^\s]+\?token=[A-Za-z0-9_-]+/;
 
 export class Engine {
@@ -40,10 +67,11 @@ export class Engine {
     if (this.child) this.stop();
 
     const args = ['--expose-internals', DSH_CLI];
+    if (fs.existsSync(PROVIDERS_PATCH)) args.push('--patch', PROVIDERS_PATCH);
     if (fs.existsSync(SEARCH_PATCH)) args.push('--patch', SEARCH_PATCH);
     args.push('--profile', 'web', '--no-open', '--port', '0');
     const child = spawn(DSH_EXE, args, {
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      env: { ...process.env, ...loadCredentialEnv(), ELECTRON_RUN_AS_NODE: '1' },
       windowsHide: true,
     });
     this.child = child;
@@ -105,7 +133,7 @@ export class Engine {
       type: 'client-request',
       rpcId: 'r' + Math.random().toString(36).slice(2) + Date.now().toString(36),
       method: endpoint,
-      payload: { args: { [argField]: {}, ...args } },
+      payload: { args: argField === null ? {} : { [argField]: {}, ...args } },
     });
     const res = await this.#raw('POST', '/api/' + endpoint, payload);
     if (res.status === 401) {
