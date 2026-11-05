@@ -3,6 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { Engine } from './engine.mjs';
 import { WebSocket } from 'ws';
 
+// Remembers which provider last answered, so the probe cost is paid once.
+class ModelPicker {
+  static chosen = null;
+  static current() { return ModelPicker.chosen; }
+  static set(combo) { ModelPicker.chosen = combo; }
+}
+
 const withTimeout = (p, ms, fallback) =>
   Promise.race([p.catch(() => fallback), new Promise((r) => setTimeout(() => r(fallback), ms))]);
 
@@ -135,14 +142,20 @@ export class StudioApi {
     };
   }
 
-  // Bind the deployment default model, because session/create leaves it unset.
-  async bindDefaultModel(sessionId) {
+  // Models differ in reachability: the deployment default may be out of balance or
+  // rate-limited. Candidates are tried in order and the first one that answers wins.
+  static MODELS = [
+    { provider: 'jojo', model: 'gpt-6.1-terra' },
+    { provider: 'jojo', model: 'gpt-6.1-sol' },
+    { provider: 'shangtang', model: 'deepseek-v4-flash' },
+    { provider: 'aliyun', model: 'deepseek-v4-flash' },
+  ];
+
+  async bindDefaultModel(sessionId, combo) {
     try {
-      const cat = await this.engine.call('session/modelCatalog', {}, null);
-      const def = cat?.default;
-      if (!def?.provider || !def?.model) return { ok: false, error: '读不到默认模型' };
-      await this.call('session/selectModel', { sessionId, provider: def.provider, model: def.model });
-      return { ok: true, provider: def.provider, model: def.model };
+      const pick = combo ?? ModelPicker.current() ?? StudioApi.MODELS[0];
+      await this.call('session/selectModel', { sessionId, provider: pick.provider, model: pick.model });
+      return { ok: true, provider: pick.provider, model: pick.model };
     } catch (err) {
       return { ok: false, error: '绑定模型失败: ' + String(err.message ?? err).slice(0, 90) };
     }
@@ -165,7 +178,8 @@ export class StudioApi {
     const helperId = created?.sessionId;
     if (!helperId) return { ok: false, error: '无法创建摘要会话' };
 
-    // A fresh session has no model bound; a prompt would be accepted and never run.
+    // A fresh session runs no model until one is bound, and a bound model can still
+    // fail on balance or rate limits: try candidates until the helper answers.
     const bound = await this.bindDefaultModel(helperId);
     if (!bound.ok) return { ok: false, error: bound.error };
 
@@ -185,29 +199,61 @@ export class StudioApi {
       transcript,
     ].join('\n');
 
-    try {
-      await this.sendPrompt(helperId, prompt);
-    } catch (err) {
-      return { ok: false, error: '摘要请求失败: ' + String(err.message ?? err).slice(0, 90) };
-    }
+    const candidates = ModelPicker.current()
+      ? [ModelPicker.current(), ...StudioApi.MODELS.filter((m) => m.provider !== ModelPicker.current().provider)]
+      : StudioApi.MODELS;
 
-    // Poll the helper session until it answers or the budget runs out.
-    const deadline = Date.now() + 90000;
     let text = '';
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 1500));
-      const hp = await this.call('session/projections', { sessionId: helperId }).catch(() => null);
-      const turns = hp?.values?.turnOutline ?? [];
-      const first = turns[0];
-      if (first?.response && String(first.response).trim() !== '') { text = String(first.response); break; }
+    let lastError = '';
+    let used = null;
+    for (const combo of candidates) {
+      const sessionCreated = await this.createSession(ws.items[0]?.workspaceId);
+      const helper = sessionCreated?.sessionId;
+      if (!helper) { lastError = '无法创建摘要会话'; break; }
+      const sel = await this.bindDefaultModel(helper, combo);
+      if (!sel.ok) { lastError = sel.error; continue; }
+      try {
+        await this.sendPrompt(helper, prompt);
+      } catch (err) {
+        lastError = '摘要请求失败: ' + String(err.message ?? err).slice(0, 90);
+        continue;
+      }
+      // Poll this helper until it answers or its own budget runs out.
+      // The outline projection truncates long answers, so the assistant message
+      // is read from the event log once the turn ends.
+      const deadline = Date.now() + 120000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const hp = await this.call('session/projections', { sessionId: helper }).catch(() => null);
+        const turns = hp?.values?.turnOutline ?? [];
+        const first = turns[0];
+        const pg = await this.call('session/page', { address: { kind: 'session', sessionId: helper }, limit: 80 }).catch(() => null);
+        const end = (pg?.records ?? []).map((r) => r.event ?? r).find((x) => x.type === 'turn/end');
+        if (end?.data?.reason?.kind === 'error') {
+          lastError = String(end.data.reason.error?.message ?? '').slice(0, 160);
+          break;
+        }
+        if (end?.data?.reason?.kind === 'completed') {
+          // Turn completed but no text captured: report what came back instead of guessing.
+          const lastAsst = [...(pg?.records ?? [])].reverse()
+            .map((r) => r.event ?? r).find((x) => x.type === 'assistant/message');
+          const blocks = lastAsst?.data?.message?.content ?? [];
+          const joined = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('');
+          if (joined.trim() !== '') { text = joined; break; }
+          if (first?.response) { text = String(first.response); break; }
+          lastError = '完成但没有文本（blocks: ' + blocks.map((b) => b.type).join(',') + '）';
+          break;
+        }
+      }
+      if (text) { used = combo; ModelPicker.set(combo); break; }
     }
-    if (!text) return { ok: false, error: '摘要生成超时' };
+    if (!text) return { ok: false, error: lastError || '摘要生成超时' };
 
     // Tolerant parse, same rules as the original plugin.
     let body = text.trim();
     if (body.startsWith('```')) body = body.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
     const s0 = body.indexOf('{'), s1 = body.lastIndexOf('}');
-    if (s0 === -1 || s1 <= s0) return { ok: false, error: '摘要输出里没有 JSON' };
+    if (s0 === -1 || s1 <= s0) return { ok: false, error: '摘要输出里没有 JSON', rawText: body.slice(0, 400) };
     try {
       const parsed = JSON.parse(body.slice(s0, s1 + 1));
       return {
@@ -216,7 +262,7 @@ export class StudioApi {
           summary: String(parsed.summary ?? '').slice(0, 300),
           keyFindings: Array.isArray(parsed.keyFindings) ? parsed.keyFindings.slice(0, 5).map((x) => String(x).slice(0, 120)) : [],
           nextStep: String(parsed.nextStep ?? '').slice(0, 120),
-          helperSessionId: helperId,
+          provider: used?.provider, model: used?.model,
         },
       };
     } catch (err) {

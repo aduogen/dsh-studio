@@ -179,47 +179,19 @@ if (process.argv.includes('--dump')) {
   app.whenReady().then(() => {
     setTimeout(async () => {
       try {
-        const info = await win.webContents.executeJavaScript(`(async () => {
-          const wait = (ms) => new Promise(r => setTimeout(r, ms));
-          await wait(3500);
-          const out = {};
-          out.status = document.getElementById('status')?.textContent;
-          out.brand = document.getElementById('brand')?.textContent;
-          out.fontMinusDisabled = document.getElementById('btn-font-minus')?.disabled;
-          out.fontPlusDisabled = document.getElementById('btn-font-plus')?.disabled;
-          out.langBtn = document.getElementById('btn-lang')?.textContent;
-
-          // 1. font scale changes the computed size
-          const before = getComputedStyle(document.querySelector('.card-title')).fontSize;
-          document.getElementById('btn-font-plus').click();
-          await wait(250);
-          const after = getComputedStyle(document.querySelector('.card-title')).fontSize;
-          out.fontChanged = before !== after;
-          out.fontBefore = before; out.fontAfter = after;
-          out.fontStepVar = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-step').trim();
-          document.getElementById('btn-font-reset').click();
-          await wait(200);
-          out.fontReset = getComputedStyle(document.documentElement).getPropertyValue('--ui-font-step').trim();
-
-          // 2. language pill cycles and repaints the chrome
-          document.getElementById('btn-lang').click();   // auto -> zh
-          await wait(300);
-          out.langAfter1 = document.getElementById('btn-lang')?.textContent;
-          out.batchLabelZh = document.getElementById('btn-batch')?.textContent;
-          out.searchPhZh = document.getElementById('search')?.placeholder;
-          document.getElementById('btn-lang').click();   // zh -> en
-          await wait(300);
-          out.langAfter2 = document.getElementById('btn-lang')?.textContent;
-          out.batchLabelEn = document.getElementById('btn-batch')?.textContent;
-          out.searchPhEn = document.getElementById('search')?.placeholder;
-          document.getElementById('btn-lang').click();   // en -> auto
-          await wait(300);
-          out.langAfter3 = document.getElementById('btn-lang')?.textContent;
-          return out;
-        })()`);
+        diag('dump script starting');
+        const scriptPath = path.join(__dirname, '..', 'probe-ui.js');
+        const info = await win.webContents.executeJavaScript(fs.readFileSync(scriptPath, 'utf8'));
         fs.writeFileSync(path.join(__dirname, '..', 'dom.json'), JSON.stringify(info, null, 2));
         diag('dom dumped');
-      } catch (e) { diag('dom dump failed: ' + String(e)); }
+        diag('dump script finished');
+      } catch (e) {
+        diag('dom dump failed: ' + String(e));
+        try {
+          const logs = await win.webContents.executeJavaScript('window.__errs || []');
+          diag('collected errors: ' + JSON.stringify(logs).slice(0, 1500));
+        } catch {}
+      }
       app.quit();
     }, 10000);
   });

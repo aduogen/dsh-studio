@@ -308,3 +308,19 @@ path.edge.full { stroke: #38d39f; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hit-snip { color: var(--fg-faint); font-size: 11px; line-height: 1.45;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---- digest on the card ---- */
+.card-digest {
+  margin-top: 7px; padding: 6px 8px; border-radius: 7px;
+  background: rgba(76,141,255,.08); border: 1px solid rgba(76,141,255,.22);
+  color: var(--fg-dim); font-size: calc(11px + var(--ui-font-step)); line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  cursor: help;
+}
+.card-refresh {
+  margin-left: auto; width: 20px; height: 18px; padding: 0;
+  border: 1px solid var(--line); border-radius: 5px; background: transparent;
+  color: var(--fg-dim); font-size: 11px; line-height: 1; cursor: pointer;
+}
+.card-refresh:hover:not(:disabled) { background: var(--card-hover); color: var(--fg); }
+.card-refresh:disabled { opacity: .5; cursor: default; }

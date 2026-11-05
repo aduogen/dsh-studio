@@ -33,6 +33,8 @@ const state = {
   edges: [],               // {id, fromCardId, toCardId, kind, injectedText?}
   connecting: null,        // {fromCardId, x, y} while dragging a new line
   pendingSpawn: null,      // {fromCardId, flowX, flowY} while the preview is open
+  digests: new Map(),      // sessionId -> {summary, keyFindings, nextStep}
+  digestBusy: new Set(),   // sessionIds currently generating
 };
 
 const snap = (v) => Math.round(v / GRID) * GRID;
@@ -361,6 +363,19 @@ let render = function () {
       card.appendChild(pv);
     }
 
+    const dg = state.digests.get(s.sessionId);
+    if (dg?.summary) {
+      const dgEl = document.createElement('div');
+      dgEl.className = 'card-digest';
+      dgEl.textContent = dg.summary;
+      dgEl.title = [
+        dg.summary,
+        ...(dg.keyFindings ?? []).map((x) => '· ' + x),
+        dg.nextStep ? '下一步：' + dg.nextStep : '',
+      ].filter(Boolean).join('\n');
+      card.appendChild(dgEl);
+    }
+
     const foot = document.createElement('div');
     foot.className = 'card-meta';
     const dot = document.createElement('span');
@@ -376,6 +391,17 @@ let render = function () {
       b.textContent = label;
       foot.appendChild(b);
     }
+    const refresh = document.createElement('button');
+    refresh.className = 'card-refresh';
+    refresh.textContent = state.digestBusy.has(s.sessionId) ? '…' : '⟳';
+    refresh.title = '生成 / 重新生成摘要';
+    if (state.digestBusy.has(s.sessionId)) refresh.disabled = true;
+    refresh.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      generateDigest(s);
+    });
+    foot.appendChild(refresh);
     card.appendChild(foot);
 
     const grip = document.createElement('span');
@@ -420,6 +446,27 @@ function selectSession(sessionId) {
   state.panelSession = sessionId;
   document.querySelectorAll('.card').forEach((x) => x.classList.toggle('selected', x.dataset.sessionId === sessionId));
   openPanel(sessionId);
+}
+
+async function generateDigest(s) {
+  if (state.digestBusy.has(s.sessionId)) return;
+  state.digestBusy.add(s.sessionId);
+  render();
+  toast('正在生成摘要…');
+  try {
+    const res = await window.studio.genDigest(s.sessionId, s.title);
+    if (!res?.ok) {
+      toast('摘要失败: ' + String(res?.error ?? '').slice(0, 70), 'error');
+      return;
+    }
+    state.digests.set(s.sessionId, res.value);
+    toast('摘要已生成（' + (res.value.model ?? '') + '）');
+  } catch (err) {
+    toast('摘要失败: ' + String(err.message ?? err).slice(0, 70), 'error');
+  } finally {
+    state.digestBusy.delete(s.sessionId);
+    render();
+  }
 }
 
 // ---- side panel inside the canvas -----------------------------------------
